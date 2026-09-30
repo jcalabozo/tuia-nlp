@@ -1,0 +1,2188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz</title>
+<!--
+  ╔════════════════════════════════════════════════════════════════════════╗
+  ║  PLANTILLA DE QUIZ · motor v2                                           ║
+  ║                                                                        ║
+  ║  Para crear un quiz nuevo: copiar este archivo y reemplazar SOLO el     ║
+  ║  bloque "DATOS DEL QUIZ" (constantes QUIZ y QUESTIONS).                 ║
+  ║  Todo lo demás (conteos, temas, porcentajes) se calcula solo.           ║
+  ║                                                                        ║
+  ║  Formato de las preguntas y reglas de calidad: COMO_USAR.md            ║
+  ║  Validar antes de usar:  node validar_quiz.mjs <archivo.html>          ║
+  ╚════════════════════════════════════════════════════════════════════════╝
+-->
+<script>
+/* ═══════════════════════ INICIO DATOS DEL QUIZ ═══════════════════════ */
+
+const QUIZ = {
+  id: "nlp-u1-u2",
+  eyebrow: "TUIA · Procesamiento de Lenguaje Natural · Parcial",
+  titulo: "Quiz de <em>auto&shy;evaluación</em>",
+  subtitulo: "Unidades 1 y 2",
+  descripcion: "Preguntas conceptuales sobre <strong>extracción y procesamiento de texto</strong> (Unidad 1) y <strong>representación vectorial</strong> (Unidad 2), más un tema con conceptos de las <strong>prácticas y TPs</strong>. Las preguntas de <strong>desarrollo</strong> traen respuesta modelo y puntos clave para practicar la parte escrita."
+};
+
+const QUESTIONS = [
+  // ═══════════════ U1 · EXTRACCIÓN ═══════════════
+  {
+    cat: "U1 · Extracción",
+    type: "single",
+    text: "¿Qué distingue a la <em>extracción de texto</em> de la <em>extracción de información</em>?",
+    options: [
+      "La de texto aísla texto plano de un contenedor (PDF, HTML, audio); la de información saca entidades y relaciones de ese texto",
+      "Son sinónimos: ambas designan el paso de convertir cualquier formato de archivo a texto plano legible por un programa de computadora",
+      "La de texto se aplica solo a páginas web, mientras que la de información se aplica a documentos PDF y a escaneos",
+      "La de información va primero: detecta las entidades, y después la de texto reconstruye el documento a partir de ellas"
+    ],
+    answer: 0,
+    explain: "La <strong>extracción de texto</strong> recupera texto plano de un formato de almacenamiento. La <strong>extracción de información</strong> (<em>Information Extraction</em>) trabaja <em>después</em>: busca entidades, relaciones o eventos estructurados en un texto ya extraído. No son sinónimos ni dependen del tipo de fuente."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "single",
+    text: "La cadena «¿Cómo estás?» ocupa 15 bytes en UTF-8 y 12 bytes en ISO-8859-1. ¿Por qué?",
+    options: [
+      "En UTF-8, los caracteres fuera de ASCII (¿, ó, á) ocupan 2 bytes; en ISO-8859-1, cada carácter ocupa 1 byte",
+      "ISO-8859-1 no puede representar la ó ni la á, así que las omite al guardar el archivo y la cadena queda más corta",
+      "UTF-8 guarda las mayúsculas con un byte extra que marca el cambio de caja, y ISO-8859-1 no lo necesita",
+      "UTF-8 usa siempre 2 bytes por carácter y después comprime los espacios y los signos de puntuación del texto"
+    ],
+    answer: 0,
+    explain: "UTF-8 es de <strong>longitud variable</strong>: los caracteres ASCII ocupan 1 byte y el resto 2 o más (¿ = C2 BF, ó = C3 B3, á = C3 A1). ISO-8859-1 (Latin-1) usa 1 byte fijo por carácter y <em>sí</em> incluye la ó y la á (F3 y E1). Por eso, leer un archivo con la codificación equivocada produce caracteres raros o un <code>UnicodeDecodeError</code>."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "single",
+    text: "PyPDF2 devuelve texto vacío al procesar un PDF armado con páginas escaneadas. ¿Qué camino propone el apunte?",
+    options: [
+      "Convertir cada página en imagen (pdf2image) y aplicarle OCR, por ejemplo con pytesseract",
+      "Volver a abrir el archivo indicando la codificación ISO-8859-1 y repetir la extracción del texto",
+      "Parsear el PDF con BeautifulSoup y lxml, que sí leen la capa de texto que PyPDF2 no llega a ver",
+      "Reconstruir el texto leyendo el trailer y la tabla de referencias cruzadas del archivo PDF"
+    ],
+    answer: 0,
+    explain: "Un PDF escaneado no tiene capa de texto: cada página es una <strong>imagen</strong>. Hay que rasterizar las páginas (<code>pdf2image</code>, que requiere <code>poppler-utils</code>) y aplicar <strong>OCR</strong>. La codificación no tiene nada que ver, BeautifulSoup es para HTML, y el trailer y la tabla de referencias cruzadas solo ubican los objetos dentro del archivo."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "match",
+    text: "Emparejá cada herramienta con su uso principal.",
+    pairs: [
+      ["pdfplumber", "Extraer texto y tablas de un PDF digital"],
+      ["EasyOCR", "Reconocer texto en imágenes junto con su ubicación"],
+      ["python-docx", "Leer los párrafos de un documento de Word"],
+      ["SpeechRecognition", "Transcribir un archivo de audio a texto"],
+      ["youtube-transcript-api", "Obtener las transcripciones de un video de YouTube"]
+    ],
+    extra: ["Segmentar un texto en oraciones en 22 idiomas"],
+    explain: "La opción que sobra describe a <strong>pySBD</strong>, un segmentador de oraciones. Otras herramientas de la unidad: <strong>pytesseract</strong> (wrapper de Tesseract OCR), <strong>PyPDF2/pypdf</strong> y <strong>PyMuPDF</strong> para PDF, <strong>BeautifulSoup</strong> para HTML y <strong>wikipedia-api</strong> para Wikipedia."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "single",
+    text: "¿Por qué los conversores de documentos como MarkItDown o Docling generan <em>Markdown</em> en lugar de texto plano?",
+    options: [
+      "Porque conserva la estructura (títulos, listas, tablas, orden de lectura) que necesita un pipeline de NLP o RAG",
+      "Porque el Markdown ocupa menos bytes que el texto plano y así baja el costo de almacenar un corpus grande de documentos",
+      "Porque los modelos de lenguaje no aceptan texto plano y necesitan marcas de formato para poder leer el contenido",
+      "Porque al pasar a Markdown el texto ya queda limpio y segmentado, listo para calcular los embeddings directamente"
+    ],
+    answer: 0,
+    explain: "Un PDF guarda instrucciones de dibujo, no párrafos: <code>extract_text()</code> pierde columnas, tablas y títulos. Los conversores reconstruyen esa <strong>estructura</strong> y la vuelcan a Markdown, el formato intermedio típico de la ingestión. Ojo con la última opción: convertir a Markdown <strong>no</strong> elimina la necesidad de limpiar y segmentar."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "match",
+    text: "Según el criterio del apunte, emparejá cada conversor con el caso en el que conviene.",
+    pairs: [
+      ["MarkItDown", "Prototipos rápidos con muchos formatos distintos"],
+      ["Docling", "Estructura local (tablas, orden de lectura) sin usar la nube"],
+      ["MinerU", "Papers y escaneos: fórmulas a LaTeX y tablas a HTML"],
+      ["Marker", "Máxima calidad en PDF difíciles, cuando hay GPU disponible"]
+    ],
+    explain: "Criterio en una frase: <strong>MarkItDown</strong> para entrar; <strong>Docling</strong> para estructura local; <strong>MinerU</strong> para papers y escaneos (OCR, fórmulas, tablas); <strong>Marker</strong> cuando la calidad del PDF importa y hay GPU. No son intercambiables: MarkItDown no «entiende» el layout como los otros tres."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "single",
+    text: "¿Qué caracteriza al modelo <em>Whisper</em>?",
+    options: [
+      "Es un Transformer secuencia a secuencia multitarea: transcribe en varios idiomas, traduce voz e identifica el idioma",
+      "Es una librería que manda el audio al servicio web de reconocimiento de Google y devuelve la transcripción como texto",
+      "Es un motor de OCR entrenado para reconocer los subtítulos incrustados en los fotogramas de un video",
+      "Es un modelo de embeddings de audio que ubica cerca, en el espacio vectorial, a las grabaciones parecidas"
+    ],
+    answer: 0,
+    explain: "Whisper es un <strong>Transformer seq2seq</strong> entrenado con un conjunto grande y diverso de audios para varias tareas a la vez (reconocimiento multilingüe, traducción de voz, identificación del idioma, detección de actividad de voz), representadas con tokens especiales. La segunda opción describe el ejemplo con <strong>SpeechRecognition</strong>, que usa el servicio de Google."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "text",
+    text: "¿Qué librería de Python, un <em>wrapper</em> de Tesseract, se usa en el apunte para extraer texto de imágenes con OCR?",
+    answers: ["pytesseract"],
+    explain: "<strong>pytesseract</strong> envuelve al motor Tesseract OCR (además hay que instalar <code>tesseract-ocr</code> en el sistema). Si también se necesita la <strong>posición</strong> del texto en la imagen, el apunte propone <strong>EasyOCR</strong>. El OCR no es 100 % preciso: binarizar, suavizar y quitar ruido de la imagen mejora el resultado."
+  },
+  {
+    cat: "U1 · Extracción",
+    type: "open",
+    text: "Tenés que armar un corpus a partir de: (1) PDFs digitales con tablas, (2) PDFs de páginas escaneadas y (3) fotos de carteles. Explicá qué herramienta o enfoque usarías en cada caso y por qué.",
+    answer: "<strong>(1) PDFs digitales:</strong> tienen capa de texto, así que se puede extraer directamente. Para respetar las tablas conviene <strong>pdfplumber</strong> (pensado para tablas y estructura) o, si se quiere reconstruir toda la estructura en Markdown o JSON de forma local, <strong>Docling</strong>. pypdf o PyMuPDF sirven para texto simple y rápido. <strong>(2) PDFs escaneados:</strong> no hay texto, solo imágenes. Hay que convertir las páginas a imágenes (<strong>pdf2image</strong>, que necesita poppler) y aplicar <strong>OCR</strong> (<strong>pytesseract</strong>), o usar un conversor con OCR (Docling, MinerU). <strong>(3) Fotos:</strong> también OCR; si importa dónde está cada texto, <strong>EasyOCR</strong> devuelve las coordenadas. En los casos 2 y 3, preprocesar la imagen (binarización, eliminación de ruido) mejora la precisión, y siempre hay que revisar la salida, porque el OCR comete errores.",
+    points: [
+      "Distinguir el PDF con capa de texto del PDF escaneado (que es una imagen)",
+      "Herramienta adecuada para tablas (pdfplumber o Docling)",
+      "Escaneados: pdf2image + OCR (pytesseract)",
+      "Fotos: OCR, con EasyOCR si se necesita la posición",
+      "El OCR no es perfecto: preprocesar la imagen y validar el resultado"
+    ]
+  },
+
+  // ═══════════════ U1 · SCRAPING Y PARSEO ═══════════════
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "single",
+    text: "En el TP de Lectulandia se usa Playwright para navegar y BeautifulSoup para extraer los datos. ¿Por qué esa división de tareas?",
+    options: [
+      "Playwright controla un navegador real y ejecuta JavaScript; BeautifulSoup solo analiza el HTML que recibe",
+      "BeautifulSoup no puede procesar HTML escrito en español, así que Playwright traduce la página antes de pasársela",
+      "Playwright descarga los EPUB de cada libro y BeautifulSoup extrae de esos archivos la sinopsis y los metadatos",
+      "BeautifulSoup es más rápido para navegar entre páginas, pero Playwright es mejor para leer atributos del HTML"
+    ],
+    answer: 0,
+    explain: "BeautifulSoup es un <strong>parser</strong>: no hace pedidos ni ejecuta JavaScript, solo recorre un HTML que ya tiene. <strong>Playwright</strong> automatiza un navegador (Chromium, incluso sin ventana) para abrir la categoría, paginar y visitar cada ficha. El TP prohíbe descargar EPUB o PDF: solo se extraen metadatos y sinopsis públicas."
+  },
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "single",
+    text: "Para scrapear contenido protegido por login usando <code>requests</code>, ¿qué rol cumple el objeto <code>Session</code>?",
+    options: [
+      "Mantiene las cookies entre solicitudes: después del POST de login, los pedidos siguientes siguen autenticados",
+      "Ejecuta el JavaScript del formulario de login y lo completa exactamente como lo haría un navegador manejado por una persona",
+      "Cifra las credenciales antes de enviarlas, para que el servidor no detecte al scraper y no lo bloquee",
+      "Guarda en disco una copia de cada página visitada, para no repetir solicitudes al mismo servidor"
+    ],
+    answer: 0,
+    explain: "El servidor guarda el ID de sesión en una <strong>cookie</strong>; <code>Session</code> la conserva entre pedidos, así que el GET a la página protegida sale «logueado». <code>requests</code> no ejecuta JavaScript: si el login depende de JS, hace falta <strong>Playwright</strong> o <strong>Selenium</strong>. Algunos sitios además piden tokens CSRF o cabeceras especiales."
+  },
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "multi",
+    text: "¿Cuáles son buenas prácticas de scraping que aparecen en el apunte o en la consigna del TP?",
+    options: [
+      "Respetar los términos de servicio del sitio y su archivo robots.txt",
+      "Hacer una pausa entre las páginas visitadas",
+      "Manejar los errores sin cortar toda la ejecución y guardar el avance de forma incremental",
+      "Descargar los archivos completos (EPUB, PDF) para tener el texto íntegro de cada libro",
+      "Omitir el control de duplicados para no perder registros que aparezcan en varias páginas"
+    ],
+    answer: [0, 1, 2],
+    explain: "El scraping es un terreno legalmente «gris»: hay que respetar los términos de servicio y <code>robots.txt</code>, y no saturar el servidor (pausas). El TP pide además controlar errores, guardar de forma incremental y <strong>eliminar duplicados</strong> por <code>url_libro</code>. Descargar libros está explícitamente <strong>prohibido</strong>."
+  },
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "single",
+    text: "El sitio que querés scrapear arma su contenido con JavaScript después de cargar la página. ¿Qué conviene usar?",
+    options: [
+      "Una herramienta que automatice un navegador, como Playwright o Selenium",
+      "requests con un objeto Session y un encabezado User-Agent de navegador",
+      "La librería parse, con un patrón que coincida con el HTML final de la página",
+      "BeautifulSoup con el parser lxml, que es capaz de interpretar el JavaScript"
+    ],
+    answer: 0,
+    explain: "<code>requests</code> baja el HTML inicial tal como lo manda el servidor; si el contenido se genera con JavaScript, ese HTML llega incompleto. Un navegador automatizado (<strong>Playwright</strong>, <strong>Selenium</strong>) ejecuta el JS y devuelve el HTML final, que después se puede analizar con BeautifulSoup. Ni BeautifulSoup ni lxml ejecutan JavaScript."
+  },
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "single",
+    text: "¿Qué es el <em>parseo</em> de texto?",
+    options: [
+      "Analizar una cadena para extraer, interpretar o estructurar su contenido según reglas, patrones o gramáticas",
+      "Convertir el texto a una codificación estándar como UTF-8 antes de guardarlo en disco o en una base de datos relacional",
+      "Reducir cada palabra a su raíz para agrupar todas las formas flexionadas de un mismo término",
+      "Dividir el texto en fragmentos de tamaño fijo, con cierto solapamiento entre fragmentos consecutivos"
+    ],
+    answer: 0,
+    explain: "Parsear es pasar de «texto que vino como vino» a <strong>datos estructurados</strong> (listas, diccionarios, campos) usando delimitadores, expresiones regulares o gramáticas. Las otras opciones describen la codificación, el <em>stemming</em> y el <em>chunking</em>."
+  },
+  {
+    cat: "U1 · Scraping y parseo",
+    type: "match",
+    text: "Emparejá cada herramienta de parseo con la situación en la que mejor encaja.",
+    pairs: [
+      ["Expresiones regulares (<code>re</code>)", "Encontrar emails o teléfonos dentro de un texto libre"],
+      ["Librería <code>parse</code>", "Leer campos de una cadena con formato fijo, como «{:d}-{:d}-{:d}»"],
+      ["<code>split()</code> de strings", "Separar una línea de log simple con estructura predecible"],
+      ["BeautifulSoup", "Recorrer el árbol HTML y seleccionar elementos por etiqueta"]
+    ],
+    explain: "<code>split()</code> sirve para formatos fijos, pero es <strong>frágil</strong> si el formato cambia. <code>re</code> permite patrones flexibles. <code>parse</code> es como un <code>format()</code> al revés: extrae valores de cadenas con formato conocido. BeautifulSoup parsea HTML (con <code>find_all</code> o con selectores CSS mediante <code>select</code>)."
+  },
+
+  // ═══════════════ U1 · PREPROCESAMIENTO ═══════════════
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "tf",
+    text: "«Ç» escrita como un solo carácter (<code>\\u00C7</code>) y «C» seguida de una cedilla combinante (<code>\\u0043\\u0327</code>) se ven iguales en pantalla, pero Python las considera distintas al compararlas con <code>==</code>.",
+    answer: true,
+    explain: "<strong>Verdadero.</strong> Se ven idénticas, pero son secuencias de <em>code points</em> distintas, así que <code>==</code> da <code>False</code>. Por eso se <strong>normaliza</strong> con <code>unicodedata.normalize</code> (por ejemplo, a la forma NFKD) antes de comparar o de quitar acentos."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "single",
+    text: "¿Cuál es la idea para eliminar acentos con el módulo <code>unicodedata</code>?",
+    options: [
+      "Descomponer el texto (forma NFKD), que separa la letra de su acento, y descartar los caracteres combinantes",
+      "Reemplazar cada vocal acentuada por la misma vocal sin tilde, usando un diccionario de equivalencias escrito a mano",
+      "Recodificar el texto a ISO-8859-1, que no admite tildes, y después volver a convertirlo a UTF-8",
+      "Aplicar casefold(), que además de pasar todo a minúsculas elimina todas las marcas diacríticas"
+    ],
+    answer: 0,
+    explain: "La forma canónica descompuesta separa «á» en «a» + acento combinante; después se filtran los combinantes. Funciona para varios idiomas sin armar tablas a mano. ISO-8859-1 <em>sí</em> tiene vocales acentuadas, y <code>casefold()</code> solo unifica mayúsculas y minúsculas."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "single",
+    text: "En análisis de sentimiento, ¿por qué es riesgoso eliminar stopwords con una lista genérica?",
+    options: [
+      "Porque suele incluir negaciones e intensificadores («no», «sin», «muy», «apenas») que cambian el sentido",
+      "Porque las stopwords son las palabras con más carga emocional, y sin ellas todo el texto queda con tono neutro",
+      "Porque quitar stopwords agranda el vocabulario y hace más lento el entrenamiento del modelo",
+      "Porque las listas genéricas existen solo en inglés, y en español terminan eliminando palabras al azar"
+    ],
+    answer: 0,
+    explain: "Frecuente no es sinónimo de irrelevante: «no me gustó» sin «no» se invierte. Por eso se usan listas <strong>personalizadas</strong> que conservan negaciones, intensificadores y moduladores. Quitar stopwords <em>reduce</em> el vocabulario, y NLTK trae listas en español."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "match",
+    text: "Emparejá cada técnica de normalización con un ejemplo de lo que hace.",
+    pairs: [
+      ["Estandarización", "Reemplazar «q» y «xq» por su forma completa usando un diccionario"],
+      ["Corrección ortográfica", "Unificar «proccessing» y «processing» en una sola forma"],
+      ["Eliminación de acentos", "Lograr que una búsqueda de «cafe» encuentre también «café»"],
+      ["Stemming", "Recortar sufijos con reglas, aunque la raíz no sea una palabra real"],
+      ["Lematización", "Llevar «hojas» a «hoja», una forma válida del idioma"]
+    ],
+    explain: "Estandarizar es llevar el texto a un formato uniforme (abreviaturas, jerga). La corrección ortográfica evita que los errores de tipeo generen «palabras» distintas. Stemming y lematización reducen a una base, pero solo la lematización garantiza una palabra del idioma."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "single",
+    text: "¿Qué conviene hacer <em>antes</em> de aplicar un corrector ortográfico?",
+    options: [
+      "Resolver las abreviaturas (por ejemplo, «pq» → «porque»), porque si no el corrector las «arregla» mal",
+      "Aplicar stemming, para que el corrector compare raíces en lugar de palabras completas y se equivoque menos",
+      "Eliminar las stopwords, que el corrector interpreta como errores de tipeo y termina descartando",
+      "Vectorizar el texto con hashing, para que el corrector trabaje con un vocabulario de tamaño fijo"
+    ],
+    answer: 0,
+    explain: "El apunte lo dice explícitamente: las abreviaturas se resuelven <strong>antes</strong>; si no, el corrector falla (convertiría «pq» en cualquier palabra cercana). Además, la efectividad depende del idioma: TextBlob anda bien en inglés, y para español conviene <code>pyspellchecker</code> o <code>autocorrect</code>."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "text",
+    text: "¿Qué librería señala el apunte como excelente para corrección ortográfica en <em>inglés</em>, pero poco efectiva en español?",
+    answers: ["TextBlob"],
+    explain: "<strong>TextBlob</strong>. Para español, el apunte sugiere <strong>pyspellchecker</strong> o <strong>autocorrect</strong> (clase <code>Speller</code>), que soportan varios idiomas."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "tf",
+    text: "Tokenizar un texto implica eliminar la información que no le sirve al modelo.",
+    answer: false,
+    explain: "<strong>Falso.</strong> Tokenizar <strong>no elimina nada: segmenta</strong>. Define cuál es la unidad de análisis (oraciones, palabras o subpalabras) y, con eso, qué «verá» el modelo. Eliminar puntuación o stopwords son pasos distintos, y opcionales."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "single",
+    text: "¿Qué hace la <em>lematización</em> que el <em>stemming</em> no hace?",
+    options: [
+      "Usa diccionarios y análisis morfológico, con contexto y categoría gramatical, para dar una forma que existe en el idioma",
+      "Recorta sufijos con reglas heurísticas como las de Porter o Snowball, sin verificar que el resultado sea una palabra real",
+      "Quita de la oración las palabras funcionales que no aportan significado, como los artículos y las preposiciones",
+      "Divide cada palabra en n-gramas de caracteres, para poder representar también las palabras desconocidas"
+    ],
+    answer: 0,
+    explain: "La lematización (en el apunte, con <strong>spaCy</strong> y el modelo <code>es_core_news_sm</code>) devuelve <strong>lemas</strong> válidos: «hojas» → «hoja», «buenísimo» → «bueno». Es más lenta pero más precisa. La segunda opción describe al <strong>stemming</strong> (NLTK, <code>SnowballStemmer</code>), la tercera a quitar stopwords y la cuarta a FastText."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "open",
+    text: "Compará <em>stemming</em> y <em>lematización</em>: cómo funciona cada uno, qué costo tiene, qué calidad de resultado da y cuándo conviene cada uno. Incluí un ejemplo.",
+    answer: "Ambos reducen las palabras a una forma base para agrupar variantes y bajar la dimensionalidad. El <strong>stemming</strong> aplica reglas heurísticas (Porter, Snowball) que recortan sufijos sin consultar diccionarios ni verificar el resultado: es rápido y barato, pero puede dar raíces que no son palabras («corriendo» → «corr») y aplana matices. La <strong>lematización</strong> usa diccionarios y análisis morfológico, con el contexto y la categoría gramatical, para devolver el <strong>lema</strong>, una palabra válida («hojas» → «hoja», «buenísimo» → «bueno»): es más lenta, pero lingüísticamente precisa. El stemming conviene en búsqueda y recuperación de información, donde importa agrupar formas rápido. La lematización conviene cuando importan la precisión o la interpretabilidad; por ejemplo, en análisis de sentimiento, donde además conviene conservar el grado (comparativos y superlativos).",
+    points: [
+      "Stemming: reglas que recortan sufijos, sin diccionario",
+      "Lematización: diccionario + morfología + contexto → lema válido",
+      "Costo: stemming rápido; lematización más lenta",
+      "Calidad: el stem puede no ser una palabra; el lema sí lo es",
+      "Un ejemplo correcto de cada uno y cuándo conviene"
+    ]
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "multi",
+    text: "¿Cuáles son estrategias para tratar emojis que propone el apunte?",
+    options: [
+      "Eliminarlos, si no aportan al análisis",
+      "Convertirlos a texto (🙂 → «sonrisa»)",
+      "Tratarlos como palabras o tokens con significado propio",
+      "Reemplazarlos por su código hash para achicar el vocabulario",
+      "Pasar la imagen de cada emoji por OCR para leer su nombre"
+    ],
+    answer: [0, 1, 2],
+    explain: "Depende de la tarea: en análisis de sentimiento, los emojis suelen ser <strong>señal</strong>, no ruido. Las librerías del apunte son <strong>emoji</strong> (😊 → <code>:smiling_face_with_smiling_eyes:</code>), <strong>emot</strong> y <strong>demoji</strong>. Los emojis son caracteres Unicode, no imágenes: no hay nada que pasar por OCR."
+  },
+  {
+    cat: "U1 · Preprocesamiento",
+    type: "open",
+    text: "Diseñá un pipeline de preprocesamiento para reseñas de productos que se van a usar en <em>análisis de sentimiento</em>. Justificá qué pasos aplicás y cuáles evitás o adaptás.",
+    answer: "El criterio es no borrar señales de opinión. Pasos razonables: <strong>limpieza</strong> de restos de HTML, URLs y duplicados; <strong>normalización</strong> de la codificación (Unicode) y, según el caso, de mayúsculas y acentos (sabiendo que se pierden distinciones como «sí» y «si»); <strong>estandarización</strong> de abreviaturas y jerga («xq» → «porque») <em>antes</em> de la <strong>corrección ortográfica</strong>; <strong>tokenización</strong>; y, si se quiere agrupar variantes, <strong>lematización</strong> mejor que stemming, porque conserva lemas válidos y matices. Lo que se evita o se adapta: quitar <strong>stopwords</strong> con listas genéricas, porque eliminan negaciones e intensificadores («no», «muy», «apenas»); borrar <strong>emojis</strong> y signos enfáticos, que cargan actitud (conviene convertirlos a texto o tratarlos como tokens); y aplanar repeticiones («bueeeno») o mayúsculas sostenidas sin registrarlas antes. Cada paso es una pérdida de información deliberada y se justifica por la tarea.",
+    points: [
+      "Limpieza y normalización básica (HTML, Unicode, duplicados)",
+      "Abreviaturas antes de la corrección ortográfica",
+      "Stopwords: lista personalizada que conserve negaciones e intensificadores",
+      "Emojis y signos enfáticos como señal (convertirlos a texto o a tokens)",
+      "Lematización mejor que stemming para conservar matices",
+      "Cada paso se justifica según la tarea"
+    ]
+  },
+
+  // ═══════════════ U1 · ANALÍTICA Y SEGMENTACIÓN ═══════════════
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "single",
+    text: "¿Qué agrega el análisis de <em>correlación</em> de palabras respecto de la simple <em>co-ocurrencia</em>?",
+    options: [
+      "Tiene en cuenta también la ausencia de los términos en todo el corpus y evalúa si el patrón conjunto es consistente",
+      "Cuenta cuántas veces dos palabras aparecen juntas dentro de una ventana de ±5 palabras en cada una de las oraciones del corpus",
+      "Ordena las palabras por frecuencia absoluta y dibuja las más comunes en una nube de palabras",
+      "Predice la palabra siguiente a partir de las n − 1 anteriores usando las frecuencias de los n-gramas"
+    ],
+    answer: 0,
+    explain: "La co-ocurrencia solo cuenta apariciones conjuntas, que pueden darse por azar. La <strong>correlación</strong> (por ejemplo, Pearson sobre la matriz de presencia de <code>CountVectorizer</code>, o la información mutua) mira presencia <em>y</em> ausencia en todos los documentos. La co-ocurrencia es un <strong>prerrequisito</strong> de la correlación, pero no toda co-ocurrencia es una correlación significativa."
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "single",
+    text: "¿Cuáles son los bigramas de «El gato come pescado»?",
+    options: [
+      "«El gato», «gato come», «come pescado»",
+      "«El gato come», «gato come pescado»",
+      "«El gato», «come pescado»",
+      "«El», «gato», «come», «pescado»"
+    ],
+    answer: 0,
+    explain: "Un n-grama es una secuencia <strong>contigua</strong> de n palabras, y las ventanas se <strong>solapan</strong>: una oración de 4 palabras tiene 3 bigramas. La segunda opción son trigramas, la tercera omite «gato come» y la cuarta son unigramas. Un modelo de bigramas predice la palabra siguiente a partir de la anterior; uno de trigramas, a partir de las dos anteriores."
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "tf",
+    text: "Con <code>RecursiveCharacterTextSplitter</code>, un chunk puede quedar más corto que el <code>chunk_size</code> configurado.",
+    answer: true,
+    explain: "<strong>Verdadero.</strong> Es una confusión habitual pensar que todos miden ~<code>chunk_size</code>: en realidad tienen <strong>como máximo</strong> ese tamaño. El splitter corta donde encuentra un separador adecuado, así que muchos chunks quedan más cortos."
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "single",
+    text: "¿Para qué sirve <code>chunk_overlap</code> al segmentar un texto?",
+    options: [
+      "Repite el final de un chunk al inicio del siguiente, para preservar contexto y no cortar una idea a la mitad",
+      "Fija el tamaño máximo de cada chunk, medido en tokens del modelo de embeddings que se vaya a usar después",
+      "Descarta los chunks que se superponen en contenido, para no indexar dos veces la misma información en la base",
+      "Indica cuántos separadores distintos se prueban antes de cortar el texto carácter por carácter"
+    ],
+    answer: 0,
+    explain: "El solapamiento es <strong>intencional</strong>: da continuidad entre fragmentos consecutivos. Si es muy chico, los chunks pueden quedar sin sentido; si es muy grande, se infla el tamaño y se repite información. El tamaño máximo lo fija <code>chunk_size</code>. El solapamiento no siempre es exacto carácter por carácter: depende de dónde encuentre el splitter un separador."
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "order",
+    text: "<code>RecursiveCharacterTextSplitter</code> prueba sus separadores por defecto en un orden fijo. Ordenalos del primero al último.",
+    items: [
+      "Doble salto de línea (párrafos)",
+      "Salto de línea simple",
+      "Espacio (entre palabras)",
+      "Cadena vacía (corte por carácter)"
+    ],
+    explain: `Los separadores por defecto son <code>["\\n\\n", "\\n", " ", ""]</code>: van de la unidad más grande (el párrafo) a la más chica (el carácter), de forma recursiva, hasta que cada fragmento entra en <code>chunk_size</code>. Así se respeta todo lo posible la estructura natural del texto.`
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "match",
+    text: "Emparejá cada estrategia de segmentación con su descripción.",
+    pairs: [
+      ["Tamaño fijo", "Cortar cada N caracteres o tokens, con solapamiento opcional y sin librerías de NLP"],
+      ["Por oraciones", "Respetar los límites de oración con NLTK, spaCy, stanza o pySBD"],
+      ["Recursiva", "Aplicar una jerarquía de separadores hasta lograr el tamaño buscado"],
+      ["Especializada", "Seguir la estructura de Markdown o LaTeX: secciones, listas, ecuaciones"],
+      ["Semántica", "Agrupar oraciones por similitud de embeddings y cortar donde cambia el tema"]
+    ],
+    explain: "De la más simple a la más «inteligente»: tamaño fijo (barata); consciente del contenido (por oraciones, recursiva, especializada con <code>MarkdownTextSplitter</code> o <code>LatexTextSplitter</code>); y <strong>semántica</strong> (por ejemplo, <code>SemanticChunker</code> de <strong>chonkie</strong>, que usa un umbral de similitud)."
+  },
+  {
+    cat: "U1 · Analítica y segmentación",
+    type: "open",
+    text: "¿Qué factores tendrías en cuenta para elegir el tamaño de los chunks en un sistema de búsqueda semántica o RAG?",
+    answer: "Primero, <strong>preprocesar</strong> los datos (sacar HTML y ruido), porque el tamaño óptimo depende de un texto limpio. Después, considerar: la <strong>naturaleza del contenido</strong> (mensajes cortos o documentos extensos, y su estructura: si tiene títulos, conviene segmentar respetándolos); el <strong>modelo de embeddings</strong> y su <strong>límite de tokens</strong>, porque lo que lo supera se trunca; y el <strong>equilibrio entre contexto y precisión</strong>: los chunks chicos (128–256 tokens) capturan información granular, y los grandes (512–1024) retienen más contexto pero mezclan temas. Se prueba un <strong>rango de tamaños</strong>, se agrega <strong>solapamiento</strong> para no cortar ideas y se elige el tamaño que mejor recupera en una evaluación.",
+    points: [
+      "Preprocesar antes de elegir el tamaño",
+      "Tipo y estructura del contenido",
+      "Límite de tokens del modelo de embeddings (truncamiento)",
+      "Chunks chicos = granularidad; chunks grandes = más contexto",
+      "Probar varios tamaños (con solapamiento) y evaluar"
+    ]
+  },
+
+  // ═══════════════ U2 · VECTORIZACIÓN CLÁSICA ═══════════════
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "single",
+    text: "Además de la alta dimensionalidad, ¿qué problema de fondo tiene <em>one-hot</em> para representar palabras?",
+    options: [
+      "Todos los vectores son ortogonales: «buen» y «gran» quedan tan lejos entre sí como «día» y «ten»",
+      "Dos palabras distintas pueden recibir el mismo vector por colisiones de la función que genera los índices",
+      "El vector de una palabra cambia según la oración en la que aparece, y eso impide compararlos entre sí",
+      "Necesita entrenarse con un corpus grande antes de poder codificar la primera palabra del vocabulario"
+    ],
+    answer: 0,
+    explain: "En one-hot, cada palabra ocupa su propia dimensión, así que el producto escalar entre dos palabras distintas es 0: <strong>no hay noción de similitud</strong>. Las colisiones son un problema del <em>hashing</em>; que el vector dependa de la oración es propio de los embeddings <em>contextuales</em>; y one-hot no se entrena: solo necesita el vocabulario."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "tf",
+    text: "<code>CountVectorizer(binary=True)</code> representa cada documento marcando solo la presencia o ausencia de cada palabra, sin contar repeticiones.",
+    answer: true,
+    explain: "<strong>Verdadero.</strong> Es el «one-hot a nivel documento» de la práctica: en «el gato y el perro juegan», la columna «el» vale 1 aunque aparezca dos veces. Con <code>binary=False</code> (Count Vectorizer normal) valdría 2. Ojo: en la teoría, one-hot codifica <em>cada palabra</em> como un vector con un único 1."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "single",
+    text: "Count Vectorizer genera el mismo vector para «el perro muerde al hombre» y «el hombre muerde al perro». ¿Qué limitación muestra esto?",
+    options: [
+      "No tiene en cuenta el orden de las palabras dentro del documento",
+      "Les da demasiado peso a las palabras frecuentes como «el» y «al»",
+      "Produce colisiones cuando el vocabulario supera la cantidad de columnas",
+      "No puede representar palabras que no estaban en el vocabulario inicial"
+    ],
+    answer: 0,
+    explain: "Es una <strong>bolsa de palabras</strong>: cuenta cuántas veces aparece cada término e ignora el orden. Sobrevalorar las palabras frecuentes también es una limitación real de Count Vectorizer (la que motiva TF-IDF), pero no es la que muestra este ejemplo. Los <strong>n-gramas</strong> (<code>ngram_range</code>) recuperan un poco de orden local."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "single",
+    text: "Una palabra aparece en <em>todos</em> los documentos del corpus. Con la fórmula del apunte, IDF = log(N / df), ¿cuánto vale su IDF?",
+    options: ["0", "1", "log N", "N"],
+    answer: 0,
+    explain: "N / df = N / N = 1, y log 1 = <strong>0</strong>: la palabra no ayuda a distinguir documentos y su TF-IDF se anula. Detalle: <code>TfidfVectorizer</code> de sklearn usa por defecto una versión suavizada, log((1 + N) / (1 + df)) + 1, que en este caso vale 1. Por eso, en el ejemplo del apunte, las palabras que aparecen en 1 de 3 documentos tienen IDF ≈ 1,693 = ln 2 + 1."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "multi",
+    text: "Sobre TF-IDF, ¿cuáles afirmaciones son correctas?",
+    options: [
+      "Si una palabra aparece más veces en un documento, sube su TF-IDF en ese documento",
+      "Si una palabra aparece en muchos documentos del corpus, baja su TF-IDF",
+      "El logaritmo del IDF evita que las palabras muy raras reciban un peso desproporcionado",
+      "Captura que «auto» y «coche» significan lo mismo y les asigna vectores parecidos",
+      "En la matriz TF-IDF de sklearn, cada columna corresponde a un documento del corpus"
+    ],
+    answer: [0, 1, 2],
+    explain: "TF sube con la frecuencia en el documento; IDF baja con la cantidad de documentos que contienen la palabra; el logaritmo <strong>amortigua</strong> el crecimiento del IDF. TF-IDF sigue siendo <strong>léxico</strong>: no sabe que dos palabras distintas son sinónimos. En la matriz, las <strong>filas</strong> son documentos y las <strong>columnas</strong>, palabras."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "single",
+    text: "¿Cuál es la principal ventaja de <code>HashingVectorizer</code>?",
+    options: [
+      "No construye ni guarda un vocabulario: el vector tiene tamaño fijo y sirve para streaming o corpus enormes",
+      "Permite recuperar la palabra original a partir de cada columna, lo que facilita mucho interpretar los modelos entrenados",
+      "Captura similitud semántica, porque las palabras parecidas caen en índices de hash cercanos entre sí",
+      "Elimina por completo las colisiones, porque cada palabra recibe un índice único y reservado solo para ella"
+    ],
+    answer: 0,
+    explain: "Aplica una función hash (por ejemplo, MurmurHash) a cada token y usa el resultado módulo <code>n_features</code> como índice: <strong>no necesita <code>fit</code></strong> y el mismo vectorizador sirve para textos nuevos. A cambio, es «sin estado» (no se puede volver de la columna a la palabra) y puede haber <strong>colisiones</strong>, poco frecuentes si <code>n_features</code> es grande (2<sup>18</sup> ≈ 262 000)."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "match",
+    text: "Emparejá cada parámetro de los vectorizadores de sklearn con su efecto.",
+    pairs: [
+      ["<code>min_df=2</code>", "Descarta los términos que aparecen en menos de 2 documentos"],
+      ["<code>max_df=0.9</code>", "Descarta los términos presentes en más del 90 % de los documentos"],
+      ["<code>ngram_range=(1, 2)</code>", "Agrega pares de palabras consecutivas como features"],
+      ["<code>sublinear_tf=True</code>", "Usa log(1 + frecuencia) para que la repetición no domine"],
+      ["<code>binary=True</code>", "Registra solo presencia o ausencia, sin contar repeticiones"]
+    ],
+    explain: "Reglas prácticas de la práctica: <code>min_df=2</code> casi siempre conviene (saca los <em>hapax</em>); <code>max_df</code> filtra términos casi omnipresentes, con un efecto parecido a quitar stopwords; y <code>TfidfVectorizer(sublinear_tf=True, min_df=2)</code> es un buen punto de partida para clasificar texto."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "single",
+    text: "¿Por qué agregar bigramas (<code>ngram_range=(1, 2)</code>) puede mejorar la clasificación de reseñas como «no me gustó»?",
+    options: [
+      "Porque captura combinaciones como «no me» o «no gustó», que conservan la negación que los unigramas pierden",
+      "Porque los bigramas reemplazan a los unigramas y así la dimensión de los vectores se reduce aproximadamente a la mitad",
+      "Porque los bigramas les dan más peso a las palabras raras, igual que el IDF en TF-IDF",
+      "Porque con bigramas el vectorizador tiene en cuenta el significado de cada palabra y también sus sinónimos"
+    ],
+    answer: 0,
+    explain: "Con unigramas, «no me gustó» y «me gustó» comparten casi todo; los bigramas agregan contexto local. Con <code>(1, 2)</code> se <strong>suman</strong> a los unigramas (la dimensión <em>crece</em>), y siguen siendo features léxicas: no captan sinónimos."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "tf",
+    text: "Con TF-IDF, dos documentos que no comparten ninguna palabra pueden tener una similitud coseno alta si hablan del mismo tema.",
+    answer: false,
+    explain: "<strong>Falso.</strong> Si no comparten ningún término, no hay ninguna dimensión en la que los dos vectores sean distintos de cero a la vez: la similitud es <strong>exactamente 0</strong>. Es el ejemplo del TP2: «una novela sobre piratas» contra «un relato de bucaneros». Captar que tratan lo mismo requiere <strong>embeddings</strong>."
+  },
+  {
+    cat: "U2 · Vectorización clásica",
+    type: "open",
+    text: "Compará <em>one-hot</em>, <em>Count Vectorizer</em>, <em>TF-IDF</em> y <em>Hash Vectorizer</em>: qué representa cada uno, sus ventajas y desventajas, y la dimensión del vector que generan.",
+    answer: "<strong>One-hot:</strong> cada palabra es un vector con un 1 en su posición del vocabulario y 0 en el resto. Es simple, pero tiene la dimensión del vocabulario, no tiene en cuenta frecuencia ni relevancia, y todas las palabras son ortogonales. <strong>Count Vectorizer:</strong> cada documento es un vector con la cantidad de veces que aparece cada palabra. Tiene en cuenta la frecuencia, pero ignora el orden y sobrevalora las palabras comunes; su dimensión es la del vocabulario. <strong>TF-IDF:</strong> pondera la frecuencia en el documento (TF) por la rareza en el corpus (IDF). Destaca los términos discriminativos y baja las palabras comunes; es algo más complejo, y la dimensión sigue siendo la del vocabulario. <strong>Hash Vectorizer:</strong> mapea cada palabra a un índice con una función hash. No guarda vocabulario, tiene dimensión fija (<code>n_features</code>) y sirve para corpus enormes o streaming, pero puede tener colisiones y no permite volver a las palabras. <strong>Limitación común:</strong> son representaciones dispersas y léxicas, que no capturan semántica ni contexto.",
+    points: [
+      "Qué representa cada uno (palabra o documento; presencia, conteo, ponderación o hash)",
+      "TF-IDF = frecuencia en el documento × rareza en el corpus",
+      "Hash: dimensión fija, sin vocabulario, colisiones, no invertible",
+      "Dimensión: el vocabulario (los tres primeros) o n_features (hash)",
+      "Ninguno captura semántica: son vectores dispersos y léxicos"
+    ]
+  },
+
+  // ═══════════════ U2 · WORD EMBEDDINGS ═══════════════
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Cuál es la idea central detrás de los <em>word embeddings</em>?",
+    options: [
+      "Las palabras que aparecen en contextos similares tienen significados similares, así que sus vectores deben quedar cerca",
+      "Cada palabra debe ocupar su propia dimensión, ortogonal a todas las demás, para que el modelo nunca llegue a confundirlas entre sí",
+      "El significado de una palabra depende de su frecuencia total en el corpus: cuanto más frecuente, más central queda",
+      "Las palabras que comparten sus primeras letras comparten significado y deben tener vectores parecidos"
+    ],
+    answer: 0,
+    explain: "Es la hipótesis <strong>distribucional</strong>: «perro» y «gato» aparecen en contextos parecidos («mi ___ come mucho»), así que terminan cerca. Los embeddings son <strong>densos</strong>, de dimensión relativamente baja y <strong>aprendidos</strong> de los datos, a diferencia de one-hot (disperso, ortogonal y fijado a mano)."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "multi",
+    text: "¿Por qué en NLP se prefiere la similitud coseno a la distancia euclidiana?",
+    options: [
+      "Depende de la orientación y no de la magnitud: un texto corto y uno largo sobre el mismo tema pueden resultar similares",
+      "En alta dimensión, la distancia euclidiana pierde significado (la maldición de la dimensionalidad)",
+      "Se interpreta fácil: 1 es misma dirección, 0 es ortogonal y −1 es dirección opuesta",
+      "Tiene en cuenta el orden de las palabras, algo que la distancia euclidiana ignora",
+      "Solo toma valores entre 0 y 1, así que se puede leer directamente como una probabilidad"
+    ],
+    answer: [0, 1, 2],
+    explain: "cos θ = A·B / (‖A‖ ‖B‖) mide el <strong>ángulo</strong> entre los vectores. Puede ser <strong>negativa</strong> (hasta −1), así que no es una probabilidad; y no tiene nada que ver con el orden de las palabras: eso depende de cómo se construyó el vector."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Cuál es la diferencia entre <em>CBOW</em> y <em>Skip-gram</em> en Word2Vec?",
+    options: [
+      "CBOW predice la palabra central a partir de su contexto; Skip-gram predice el contexto a partir de la palabra central",
+      "CBOW predice el contexto a partir de la palabra central; Skip-gram predice la palabra central a partir de su contexto",
+      "CBOW trabaja con n-gramas de caracteres, mientras que Skip-gram trabaja con palabras completas como unidad",
+      "CBOW genera embeddings contextuales y Skip-gram genera un único vector estático para cada una de las palabras del vocabulario"
+    ],
+    answer: 0,
+    explain: "<strong>CBOW</strong> (<em>Continuous Bag of Words</em>): contexto → palabra central (promedia los vectores del contexto). <strong>Skip-gram</strong>: palabra central → palabras de contexto dentro de una ventana. La segunda opción es la trampa: están invertidas. Ninguno usa n-gramas de caracteres (eso es FastText) y ambos generan vectores <strong>estáticos</strong>. En gensim se elige con <code>sg=0</code> (CBOW) o <code>sg=1</code> (Skip-gram)."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "Después de entrenar Word2Vec, ¿de dónde salen los vectores de palabras?",
+    options: [
+      "De los pesos de la capa oculta (matriz V × N): cada fila es el vector de una palabra",
+      "De la salida softmax de la red, que asigna una probabilidad a cada palabra del vocabulario",
+      "De la codificación one-hot de la entrada, reducida después a N dimensiones con PCA",
+      "De la matriz de co-ocurrencias de la ventana, normalizada con los pesos de TF-IDF"
+    ],
+    answer: 0,
+    explain: "La tarea de predicción es una excusa: obliga a aprender la matriz de entrada V × N (V = tamaño del vocabulario, N = dimensión elegida, por ejemplo 300). Multiplicar un one-hot por esa matriz «selecciona» una fila, y esa fila es el <strong>embedding</strong>. El softmax de salida (sobre las V palabras) es lo costoso de entrenar, y por eso se usa <em>negative sampling</em>."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Qué hace <code>most_similar(positive=['rey', 'mujer'], negative=['hombre'])</code> en gensim?",
+    options: [
+      "Suma los vectores de positive, resta los de negative y devuelve las palabras más similares (coseno) al resultado",
+      "Devuelve las palabras que aparecen en la misma oración que «rey» y «mujer», pero nunca junto a «hombre»",
+      "Entrena un modelo nuevo sin «hombre» en el vocabulario y busca los vecinos más cercanos de «rey»",
+      "Calcula la distancia euclidiana entre «rey» y «mujer» y la compara con la distancia hasta «hombre»"
+    ],
+    answer: 0,
+    explain: "Es la <strong>aritmética de analogías</strong>: rey − hombre + mujer ≈ <strong>reina</strong>. Funciona porque los embeddings codifican rasgos semánticos (género, realeza, edad) como direcciones del espacio. No mira co-ocurrencias en oraciones ni reentrena nada."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "tf",
+    text: "Skip-gram distingue si una palabra de contexto aparece a la izquierda o a la derecha de la palabra central.",
+    answer: false,
+    explain: "<strong>Falso.</strong> Predice las palabras dentro de la ventana <strong>sin tener en cuenta la dirección ni la posición</strong>: en «el gato maúlla» solo aprende que «gato» y «maúlla» comparten contexto. Por eso refleja co-ocurrencias estadísticas, no secuencias gramaticales."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Qué aporta FastText respecto de Word2Vec?",
+    options: [
+      "Arma cada palabra con n-gramas de caracteres: capta la morfología y da vector a palabras fuera del vocabulario",
+      "Genera un vector distinto para cada aparición de la palabra según la oración en la que aparece, tal como lo hace BERT con Transformers",
+      "Entrena más rápido porque reemplaza la red neuronal por un conteo global de co-ocurrencias",
+      "Produce directamente embeddings de oración, sin necesidad de promediar los vectores de las palabras"
+    ],
+    answer: 0,
+    explain: "FastText (FAIR, 2016) representa la palabra como la <strong>suma de sus n-gramas de caracteres</strong>: «gato», «gatos» y «gatito» comparten piezas, y una palabra nunca vista (OOV) igual obtiene vector. Sigue siendo <strong>estático</strong>: un vector por palabra, sin importar la oración. El conteo global de co-ocurrencias describe a GloVe."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "text",
+    text: "Con n = 3, ¿cuántos n-gramas de caracteres obtiene FastText para la palabra «donde», contando los marcadores de inicio y fin &lt; y &gt;? (Respondé con un número.)",
+    answers: ["5", "cinco"],
+    exact: true,
+    explain: "<code>&lt;do</code>, <code>don</code>, <code>ond</code>, <code>nde</code>, <code>de&gt;</code>: <strong>5</strong>. Los marcadores &lt; y &gt; distinguen, por ejemplo, el trigrama «de&gt;» del final de palabra de un «de» interno. (La implementación real suma además un vector para la palabra entera, <code>&lt;donde&gt;</code>.)"
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "tf",
+    text: "Gracias a los n-gramas de caracteres, FastText asigna vectores distintos a «banco» (entidad financiera) y a «banco» (asiento).",
+    answer: false,
+    explain: "<strong>Falso.</strong> Las dos «banco» tienen los mismos caracteres y, por lo tanto, <strong>el mismo vector</strong>: FastText sigue siendo estático. Distinguir sentidos según la oración requiere embeddings <strong>contextuales</strong> (ELMo, BERT)."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "match",
+    text: "Emparejá cada modelo con lo que aportó.",
+    pairs: [
+      ["Word2Vec", "Embeddings densos estáticos con CBOW o Skip-gram (2013)"],
+      ["GloVe", "Mismo rol que Word2Vec, entrenado con co-ocurrencia global (2014)"],
+      ["FastText", "n-gramas de caracteres: morfología y palabras OOV (2016)"],
+      ["ELMo", "Primer embedding contextual de uso masivo, con biLSTM (2018)"],
+      ["BERT", "Embeddings contextuales con Transformers, base de lo posterior (2018)"]
+    ],
+    extra: ["Un vector entrenado para cada documento o párrafo (2014)"],
+    explain: "La opción que sobra es <strong>Doc2Vec</strong>. Cada hito resolvió un límite del anterior: de la palabra estática (Word2Vec, GloVe) a la subpalabra (FastText), al contexto (ELMo, BERT) y a la oración (Sentence-BERT)."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "order",
+    text: "Ordená estos hitos de los embeddings cronológicamente, del más antiguo al más reciente.",
+    items: ["Word2Vec", "GloVe", "FastText", "BERT", "Sentence-BERT", "MTEB"],
+    explain: "Word2Vec (2013) → GloVe (2014) → FastText (2016) → BERT (2018) → Sentence-BERT (2019) → MTEB (2022). El benchmark aparece cuando ya hay tantos modelos que hace falta una forma estándar de elegir entre ellos."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Qué significa que BERT genere embeddings <em>contextuales</em>?",
+    options: [
+      "El vector de cada palabra depende de la oración: «banco» no queda en el mismo punto en «dinero del banco» que en «banco de la plaza»",
+      "Que se entrenó con el contexto de todo Internet, así que ya conoce cualquier palabra que pueda aparecer en un texto",
+      "Que cada palabra tiene un único vector, que se obtiene promediando todos los contextos en los que apareció",
+      "Que el vector de una oración se obtiene concatenando los vectores de las palabras de su ventana de contexto"
+    ],
+    answer: 0,
+    explain: "Con Word2Vec o FastText, «banco» tiene <strong>un solo vector</strong>. BERT (Transformers, 2018) calcula el vector de cada token mirando toda la oración, así que una palabra polisémica recibe vectores distintos según el uso. ELMo ya lo había logrado con LSTM bidireccionales."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "single",
+    text: "¿Qué diferencia a t-SNE de PCA como técnicas para visualizar embeddings?",
+    options: [
+      "t-SNE busca preservar las vecindades locales entre puntos; PCA proyecta sobre las direcciones de máxima varianza",
+      "t-SNE es un método lineal y determinista; PCA es no lineal y da un resultado distinto en cada corrida",
+      "t-SNE necesita las etiquetas de clase para agrupar los puntos, mientras que PCA no usa ninguna etiqueta ni información de clase",
+      "t-SNE solo puede proyectar a tres dimensiones, mientras que PCA solo puede proyectar a dos dimensiones"
+    ],
+    answer: 0,
+    explain: "<strong>PCA</strong> es lineal: las primeras componentes capturan la mayor variación de los datos. <strong>t-SNE</strong> es no lineal y estocástico: intenta que los vecinos cercanos sigan cerca en 2D, por eso muestra bien los grupos (pero las distancias <em>entre</em> grupos no se interpretan). Ninguno usa etiquetas: el color de los gráficos se agrega después."
+  },
+  {
+    cat: "U2 · Word embeddings",
+    type: "open",
+    text: "Explicá por qué one-hot, Count Vectorizer y TF-IDF no capturan la semántica y cómo lo resuelven los word embeddings. ¿Qué limitación conservan Word2Vec y FastText, y qué modelos la resuelven?",
+    answer: "Los métodos de codificación tratan cada palabra como un símbolo aislado. En one-hot, todas las palabras son <strong>ortogonales</strong> («buen» está tan lejos de «gran» como de «día»), y Count Vectorizer y TF-IDF solo miden la <strong>coincidencia de términos</strong>, ponderada: dos textos con sinónimos y sin palabras en común tienen similitud 0. Además, los vectores son dispersos y del tamaño del vocabulario. Los <strong>word embeddings</strong> (Word2Vec, GloVe, FastText) aprenden vectores <strong>densos</strong> de baja dimensión a partir de grandes corpus, bajo la hipótesis distribucional: las palabras que aparecen en contextos similares quedan cerca, lo que permite medir similitud con el coseno y resolver analogías (rey − hombre + mujer ≈ reina). Su limitación es que son <strong>estáticos</strong>: un único vector por palabra, así que no distinguen sentidos («banco» financiero o asiento). Los <strong>embeddings contextuales</strong> (ELMo, con biLSTM; BERT, con Transformers) lo resuelven: el vector depende de la oración.",
+    points: [
+      "One-hot: vectores ortogonales, sin noción de similitud",
+      "Count y TF-IDF: coincidencia léxica ponderada (con sinónimos, similitud 0)",
+      "Embeddings: densos, aprendidos, hipótesis distribucional",
+      "Similitud coseno y analogías como evidencia",
+      "Límite: vectores estáticos (polisemia) → ELMo, BERT"
+    ]
+  },
+
+  // ═══════════════ U2 · EMBEDDINGS DE ORACIONES ═══════════════
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "single",
+    text: "Con vectores de palabras promediados (spaCy), «this is cool» e «is this cool» tienen similitud 1,0. ¿Por qué?",
+    options: [
+      "Porque el promedio descarta el orden: mismas palabras, mismo vector",
+      "Porque spaCy normaliza las oraciones cortas y siempre les asigna similitud 1",
+      "Porque las stopwords «this» e «is» dominan el promedio y anulan a «cool»",
+      "Porque el modelo mediano no tiene vectores y solo compara la longitud"
+    ],
+    answer: 0,
+    explain: "El promedio es <strong>conmutativo</strong>: cambiar el orden no cambia el resultado, aunque cambie el significado. Otro problema del promedio es la <strong>pérdida de información</strong>: una oración de una sola palabra puede dar similitud alta con otra mucho más rica. Hay remedios manuales (ponderar con TF-IDF, sacar stopwords, agregar n-gramas), pero la alternativa de fondo son modelos entrenados de punta a punta para oraciones."
+  },
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "single",
+    text: "¿Por qué Sentence-BERT hace viable la búsqueda semántica sobre miles de oraciones, cuando BERT usado como <em>cross-encoder</em> no lo hace?",
+    options: [
+      "Codifica cada oración por separado en un vector (redes siamesas) que se compara con coseno; el cross-encoder procesa cada par",
+      "Usa vectores dispersos del tamaño del vocabulario, que se comparan mucho más rápido que los vectores densos del modelo BERT",
+      "Reemplaza la arquitectura Transformer por una red recurrente, que es más liviana y más rápida de ejecutar",
+      "Elimina las stopwords antes de codificar, lo que reduce a la mitad el costo de cada comparación de pares"
+    ],
+    answer: 0,
+    explain: "Un <strong>cross-encoder</strong> necesita pasar <em>cada par</em> de oraciones por la red: con miles de oraciones, la cantidad de pares crece cuadráticamente. <strong>SBERT</strong> (entrenado con redes siamesas y tripletas) calcula el embedding de cada oración <strong>una sola vez</strong>, y después comparar es un coseno. En el paper original, encontrar el par más parecido entre 10 000 oraciones pasa de unas 65 horas a unos 5 segundos."
+  },
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "single",
+    text: "¿Qué es MTEB?",
+    options: [
+      "Un benchmark que evalúa modelos de embeddings en muchas tareas e idiomas, con un leaderboard público",
+      "Un modelo de embeddings multilingüe que Google entrenó sobre 112 idiomas y 58 conjuntos de datos públicos",
+      "Una librería para guardar embeddings en una base de datos vectorial con índices aproximados",
+      "Una técnica de reducción de dimensionalidad para visualizar embeddings de oraciones en 2D"
+    ],
+    answer: 0,
+    explain: "<strong>Massive Text Embedding Benchmark</strong> (2022): 58 datasets, 112 idiomas y 8 tareas (bitext mining, clasificación, clustering, clasificación de pares, reranking, retrieval, STS y resumen). No es un modelo: sirve para <strong>elegir</strong> uno según la tarea, el idioma y el tamaño. La segunda opción es la trampa: mezcla las cifras del benchmark."
+  },
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "multi",
+    text: "Según el apunte, ¿qué hay que tener en cuenta al elegir del leaderboard de MTEB un modelo para un proyecto en español?",
+    options: [
+      "Que sea multilingüe o esté entrenado en español",
+      "Su tamaño: la memoria y la latencia que exige",
+      "Validarlo con un puñado de pares de ejemplo",
+      "Reentrenarlo desde cero con el corpus propio",
+      "Elegir siempre el de mayor dimensión de vector"
+    ],
+    answer: [0, 1, 2],
+    explain: "En la práctica <strong>no hace falta reentrenar</strong> un embedding de oración: se elige un modelo multilingüe o en español, se chequea que entre en la memoria y la latencia disponibles, y se valida con ejemplos propios. Cargarlo es una línea: <code>SentenceTransformer(\"nombre-del-modelo\")</code>. Más dimensión no implica un mejor modelo para tu tarea."
+  },
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "tf",
+    text: "En el <em>Masked Language Modeling</em>, el modelo aprende prediciendo palabras ocultas, y eso lo obliga a aprender en qué contextos aparece cada palabra.",
+    answer: true,
+    explain: "<strong>Verdadero.</strong> Es la tarea de preentrenamiento de BERT. Para adivinar la palabra tapada, el modelo tiene que usar el contexto; al optimizar eso, los textos con significado parecido (aunque usen palabras distintas, o incluso otro idioma en los modelos multilingües) terminan con vectores cercanos. El modelo no «entiende» como un humano: aprende patrones estadísticos."
+  },
+  {
+    cat: "U2 · Embeddings de oraciones",
+    type: "open",
+    text: "¿Qué son los <em>sentence embeddings</em> y para qué se usan? ¿Por qué promediar word embeddings es una solución limitada, y qué alternativa usa el apunte?",
+    answer: "Son vectores de dimensión fija que representan el significado de una oración, un párrafo o un documento completo, de modo que los textos con significado parecido quedan cerca aunque usen palabras distintas o tengan otra longitud. Se usan en búsqueda semántica, clasificación, clustering, respuesta a preguntas y recuperación para RAG. La forma ingenua de obtenerlos es <strong>promediar</strong> los vectores de las palabras, pero el promedio <strong>descarta el orden</strong> («this is cool» = «is this cool») y <strong>pierde información</strong> (oraciones muy distintas pueden dar similitud alta). Se puede mejorar a mano (ponderar con TF-IDF, sacar stopwords, agregar n-gramas), pero la solución de fondo es un modelo entrenado <strong>de punta a punta</strong> para oraciones: <strong>Sentence-BERT</strong>, que con redes siamesas produce embeddings comparables con el coseno (en el apunte, <code>distiluse-base-multilingual-cased-v1</code>). Para elegir el modelo se usa el leaderboard de <strong>MTEB</strong>.",
+    points: [
+      "Vector de dimensión fija para textos de cualquier longitud",
+      "Aplicaciones: búsqueda semántica, clasificación, clustering, RAG",
+      "El promedio pierde el orden y parte de la información",
+      "Alternativa: Sentence-BERT (redes siamesas, coseno)",
+      "Elegir el modelo con MTEB (idioma, tamaño)"
+    ]
+  },
+
+  // ═══════════════ PRÁCTICAS Y TPs ═══════════════
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "Limpiaste un corpus para TF-IDF (minúsculas, sin stopwords, sin puntuación). ¿Conviene pasarle ese mismo texto a un modelo de oración como SBERT?",
+    options: [
+      "No: se entrenó con texto natural y usa el orden y las palabras funcionales; el preprocesamiento depende del modelo",
+      "Sí: cuanto más limpio está el texto, mejores embeddings produce cualquier modelo, sea léxico o sea una red neuronal profunda",
+      "Sí, pero solo si además se aplica stemming, para que el vocabulario coincida con el vocabulario del modelo",
+      "No, porque SBERT necesita el texto lematizado y sin tildes para poder tokenizarlo de forma correcta"
+    ],
+    answer: 0,
+    explain: "Idea clave del TP2: <strong>el preprocesamiento pertenece al modelo, no al corpus</strong>. Para una bolsa de palabras, limpiar reduce ruido; para un modelo de oración es <strong>destructivo</strong>, porque saca justamente las palabras funcionales y el orden que el modelo usa. Por eso se preparan dos versiones del texto: una tokenizada y limpia, y otra cruda. Cada decisión de limpieza es una pérdida de información deliberada."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "En el TP2, ¿para qué se calcula la precision@k de elegir documentos <em>al azar</em>?",
+    options: [
+      "Como piso: si un género cubre media colección, el azar ya ronda 0,5 y un 0,55 apenas lo supera",
+      "Para reemplazar a TF-IDF como línea de base, porque TF-IDF siempre le gana al azar por construcción",
+      "Para estimar cuántas consultas hacen falta en queries.json hasta que la métrica deje de variar",
+      "Para normalizar los embeddings antes de guardarlos, restando la similitud esperada por azar"
+    ],
+    answer: 0,
+    explain: "<strong>Toda métrica necesita su línea de base.</strong> El azar es el <em>piso</em> y TF-IDF, la línea de base léxica: un número suelto («0,55») no dice nada si no se sabe cuánto da no hacer nada. Si TF-IDF empata o gana en algunas consultas, la consigna no es cambiar la métrica: es explicar por qué pasa."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "¿Por qué el TP2 pide incluir al menos una consulta que no comparta ninguna palabra con sus documentos relevantes?",
+    options: [
+      "Porque ahí TF-IDF no puede acertar por construcción, y se ve la diferencia con los embeddings",
+      "Porque así la precision@k de todos los modelos da 0 y funciona como control de que el código anda",
+      "Porque las consultas sin palabras en común son las únicas que el modelo de oración no trunca",
+      "Porque así se evita que el conjunto de evaluación termine favoreciendo a los modelos multilingües"
+    ],
+    answer: 0,
+    explain: "Sin términos compartidos, la similitud TF-IDF entre consulta y documento es 0: el modelo léxico <strong>no puede ganar</strong>. Es el caso que hace visible lo que aportan los embeddings (por ejemplo, «piratas» contra «bucaneros»)."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "tf",
+    text: "En una proyección t-SNE, las distancias entre clusters se pueden interpretar como distancias reales entre esos grupos.",
+    answer: false,
+    explain: "<strong>Falso.</strong> t-SNE preserva vecindades <strong>locales</strong>; el tamaño de los clusters y la distancia entre ellos dependen de parámetros como la <code>perplexity</code> y no tienen interpretación directa. El TP pide justificar la <code>perplexity</code> elegida y explicitar esta advertencia."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "Proyectás a 2D con PCA embeddings de 384 dimensiones, coloreados por género, y los géneros aparecen mezclados. ¿Qué se puede concluir?",
+    options: [
+      "Nada definitivo: dos componentes explican poca varianza y la separación puede existir en otras dimensiones",
+      "Que el modelo de embeddings no captura los géneros y conviene volver a usar TF-IDF para el buscador",
+      "Que hay que aumentar la cantidad de clusters de K-Means hasta que los géneros se vean bien separados",
+      "Que PCA falló y hay que repetirla con otra semilla aleatoria hasta que aparezcan los grupos esperados"
+    ],
+    answer: 0,
+    explain: "Proyectar cientos de dimensiones a 2 <strong>descarta casi todo</strong>: en la práctica, las dos primeras componentes suelen explicar apenas un 10–15 % de la varianza. Por eso el TP pide informar la varianza explicada. Y repetir PCA no «arregla» nada: no es un método estocástico como t-SNE."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "En la práctica de embeddings semánticos, antes de calcular el centroide de cada género se resta la media global de los embeddings. ¿Por qué?",
+    options: [
+      "Porque todos comparten una componente común («sinopsis de libro en español») que deja los centroides con similitud ≈ 0,98",
+      "Porque la función cosine_similarity de sklearn falla cuando los vectores no están centrados en el origen de coordenadas del espacio",
+      "Porque al centrarlos, los embeddings se vuelven dispersos y se pueden comparar mucho más rápido",
+      "Porque así se eliminan los libros duplicados antes de agrupar los embeddings por género literario"
+    ],
+    answer: 0,
+    explain: "Si todos los vectores apuntan más o menos en la misma dirección, cualquier promedio se parece a cualquier otro. Restar la media global elimina esa componente compartida y deja a la vista lo que <strong>distingue</strong> a cada género. Relacionado: en el TP2 se mira la distribución de similitudes entre pares al azar, porque un espacio donde todo se parece a todo no discrimina."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "multi",
+    text: "Sobre el límite de tokens de un modelo de oración como SBERT, ¿qué afirmaciones son correctas?",
+    options: [
+      "Los textos más largos que el límite se truncan: el final no entra en el embedding",
+      "El modelo no avisa cuando trunca: hay que contar cuántos documentos lo superan",
+      "Partir los textos largos en chunks y guardar varios vectores por documento lo mitiga",
+      "El modelo divide los textos largos automáticamente y promedia los fragmentos",
+      "El límite solo aplica a las consultas, no a los documentos que se indexan"
+    ],
+    answer: [0, 1, 2],
+    explain: "El TP pide reportar la dimensión, el límite de tokens y <strong>cuántos documentos se truncan</strong>, un dato que el modelo no informa. Una de las partes avanzadas propone hacer <strong>chunking</strong> de las sinopsis largas para recuperar lo que hoy se pierde."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "Un libro puede tener varios géneros a la vez (Aventuras, Histórico, Intriga). ¿Qué tipo de problema de clasificación es predecir sus géneros?",
+    options: ["Multi-etiqueta", "Multi-clase", "Binario", "Regresión"],
+    answer: 0,
+    explain: "En <strong>multi-clase</strong>, cada ejemplo pertenece a <em>una</em> de varias clases; en <strong>multi-etiqueta</strong> puede tener <em>varias</em> a la vez, y eso cambia la evaluación. Por eso la práctica toma un solo género como etiqueta, y el TP advierte que un clustering «duro» penaliza a los libros con varios géneros."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "¿Qué problema de Word2Vec resuelve el <em>negative sampling</em>?",
+    options: [
+      "Calcular el softmax sobre todo el vocabulario en cada paso es inviable; se actualizan solo unas pocas palabras «negativas»",
+      "Las palabras muy frecuentes dominan el entrenamiento, así que se descartan al azar para equilibrar el corpus",
+      "Las palabras fuera del vocabulario no tienen vector, así que se les asigna el de palabras negativas parecidas",
+      "Los vectores de los antónimos quedan cerca, así que se los separa agregando pares negativos etiquetados a mano"
+    ],
+    answer: 0,
+    explain: "La salida de Word2Vec es un softmax sobre las V palabras del vocabulario: normalizar sobre cientos de miles de palabras en cada paso es carísimo. El negative sampling lo reemplaza por una clasificación binaria: el par (palabra, contexto) real contra unas pocas palabras muestreadas como «negativas». La segunda opción describe otra técnica, el <em>subsampling</em> de palabras frecuentes."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "single",
+    text: "El modelo <code>intfloat/multilingual-e5-small</code> de la práctica usa prefijos en el texto de entrada. ¿Cómo se usan?",
+    options: [
+      "<code>query: </code> para las consultas y <code>passage: </code> para los documentos que se indexan",
+      "<code>passage: </code> para las consultas y <code>query: </code> para los documentos que se indexan",
+      "<code>query: </code> para todo el texto, y el modelo detecta solo si es una consulta o un documento",
+      "Son opcionales: solo le indican al modelo en qué idioma está escrito el texto de entrada"
+    ],
+    answer: 0,
+    explain: "E5 se entrenó distinguiendo consultas de pasajes: usar el prefijo correcto (<code>query: </code> al buscar, <code>passage: </code> al indexar) mejora bastante la calidad. En la práctica se vectoriza el corpus <strong>una sola vez</strong>, con <code>normalize_embeddings=True</code>, y se guarda para no recalcularlo."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "order",
+    text: "Ordená los pasos de la estrategia de extracción del TP de Lectulandia.",
+    items: [
+      "Abrir la página de la categoría con Playwright",
+      "Analizar el HTML con BeautifulSoup y extraer las URL de las fichas",
+      "Visitar cada ficha de libro con Playwright",
+      "Extraer los metadatos y la sinopsis con BeautifulSoup",
+      "Limpiar, validar y eliminar duplicados",
+      "Guardar el resultado en un archivo CSV"
+    ],
+    explain: "Playwright <strong>navega</strong> (categoría, paginación, fichas) y BeautifulSoup <strong>interpreta</strong> el HTML. La limpieza y la eliminación de duplicados (por <code>url_libro</code>) van antes de guardar el CSV, y el TP pide además guardar de forma incremental para no perder el avance si algo falla."
+  },
+  {
+    cat: "Prácticas y TPs",
+    type: "open",
+    text: "¿Cómo evaluarías si un buscador semántico basado en embeddings es mejor que uno basado en TF-IDF? Mencioná qué medirías, contra qué lo compararías y qué limitaciones tiene esa evaluación.",
+    answer: "Armaría un <strong>conjunto de evaluación propio</strong>: al menos 10 consultas en lenguaje natural con los documentos relevantes de cada una, definidos <strong>antes</strong> de ver los resultados (si no, es hacerse trampa). Calcularía la <strong>precision@k</strong> de cada modelo y la compararía con dos <strong>líneas de base</strong>: TF-IDF (la léxica) y la <strong>elección al azar</strong> (el piso), porque si una clase cubre media colección el azar ya da alto. Incluiría consultas <strong>sin palabras en común</strong> con sus relevantes, donde TF-IDF no puede ganar, y analizaría en qué tipo de consulta gana cada modelo, con al menos un caso de falla y una hipótesis de por qué falló. Limitaciones: precision@k no mide el <em>recall</em> ni el orden dentro del top-k, depende de juicios de relevancia binarios y subjetivos, y con pocas consultas los resultados son ruidosos. Para elegir un modelo para producción también pesan el costo, la privacidad y la reproducibilidad.",
+    points: [
+      "Conjunto de consultas con relevantes definidos antes de ver resultados",
+      "Métrica: precision@k",
+      "Líneas de base: TF-IDF y azar (piso)",
+      "Consultas sin solapamiento léxico",
+      "Qué no mide la métrica (recall, orden, subjetividad, pocas consultas)",
+      "Analizar casos de falla con una hipótesis"
+    ]
+  }
+];
+
+/* ═══════════════════════ FIN DATOS DEL QUIZ ═══════════════════════ */
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inria+Sans:wght@300;400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f0e6;
+    --paper-deep: #ece4d3;
+    --card: #fffcf4;
+    --ink: #1a1612;
+    --ink-soft: #5a4d3e;
+    --rule: #c8b99a;
+    --accent: #8b1a1a;
+    --accent-tint: rgba(139, 26, 26, 0.06);
+    --correct: #3d5a2c;
+    --correct-tint: rgba(61, 90, 44, 0.09);
+    --wrong: #9b2020;
+    --wrong-tint: rgba(139, 26, 26, 0.07);
+    --partial: #9a5f12;
+    --partial-tint: rgba(184, 115, 31, 0.11);
+    --on-strong: #ffffff;
+    --shadow: rgba(26, 22, 18, 0.08);
+    --serif: 'EB Garamond', Georgia, serif;
+    --sans: 'Inria Sans', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171411; --paper-deep: #221e19; --card: #1e1a16; --ink: #ede5d6; --ink-soft: #b3a58d;
+      --rule: #4a4034; --accent: #e07a6f; --accent-tint: rgba(224, 122, 111, 0.1);
+      --correct: #9cc47f; --correct-tint: rgba(156, 196, 127, 0.11); --wrong: #ee8579; --wrong-tint: rgba(238, 133, 121, 0.1);
+      --partial: #e0a95c; --partial-tint: rgba(224, 169, 92, 0.12); --on-strong: #171411; --shadow: rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #171411; --paper-deep: #221e19; --card: #1e1a16; --ink: #ede5d6; --ink-soft: #b3a58d;
+    --rule: #4a4034; --accent: #e07a6f; --accent-tint: rgba(224, 122, 111, 0.1);
+    --correct: #9cc47f; --correct-tint: rgba(156, 196, 127, 0.11); --wrong: #ee8579; --wrong-tint: rgba(238, 133, 121, 0.1);
+    --partial: #e0a95c; --partial-tint: rgba(224, 169, 92, 0.12); --on-strong: #171411; --shadow: rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.6; min-height: 100vh; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .container { max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  .hidden { display: none !important; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--paper-deep); padding: 0.05rem 0.3rem; border-radius: 2px; }
+  sub, sup { line-height: 0; }
+
+  /* HEADER */
+  .header { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; margin-bottom: 2rem; position: relative; }
+  .header-eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem; padding-right: 3rem; }
+  .header h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(2rem, 5vw, 2.8rem); line-height: 1.1; letter-spacing: -0.01em; }
+  .header h1 em { color: var(--accent); font-style: italic; }
+  .header-meta { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }
+  .header-meta strong { color: var(--ink); }
+  .theme-toggle { position: absolute; top: 0; right: 0; width: 2.2rem; height: 2.2rem; border: 1px solid var(--rule); border-radius: 50%; background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; }
+  .theme-toggle:hover { border-color: var(--ink); }
+
+  /* BANNER */
+  .banner { border: 1px solid var(--wrong); background: var(--wrong-tint); border-radius: 3px; padding: 0.9rem 1.1rem; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .banner ul { margin: 0.4rem 0 0 1.2rem; }
+
+  /* START */
+  .start-info { font-family: var(--serif); font-size: 1.15rem; color: var(--ink-soft); margin-bottom: 1.5rem; }
+  .start-info strong { color: var(--ink); }
+  .panel { border: 1px solid var(--rule); background: var(--card); border-radius: 4px; padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; box-shadow: 0 4px 16px var(--shadow); }
+  .panel-title { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.8rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .panel-title .links { text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
+  .link { background: none; border: none; color: var(--ink-soft); text-decoration: underline; cursor: pointer; font-family: var(--mono); font-size: 0.72rem; padding: 0; }
+  .link:hover { color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .chip { border: 1px solid var(--rule); background: var(--paper); border-radius: 999px; padding: 0.35rem 0.85rem; cursor: pointer; font-size: 0.88rem; transition: all 0.15s ease; }
+  .chip strong { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); margin-left: 0.3rem; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+  .chip[aria-pressed="true"] strong { color: var(--accent); }
+  #cat-chips .chip[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
+  .setup-row { display: flex; flex-wrap: wrap; gap: 0.8rem 1.6rem; align-items: center; margin-top: 1.1rem; font-size: 0.92rem; }
+  .field select { margin-left: 0.4rem; padding: 0.3rem 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); }
+  .check { display: inline-flex; gap: 0.45rem; align-items: center; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 1rem; height: 1rem; }
+  .types-line { margin-top: 1rem; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+  .start-actions { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; margin: 1.5rem 0 2rem; }
+  .selection-summary { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }
+  .resume { border-left: 3px solid var(--accent); }
+  .resume p { margin-bottom: 0.8rem; }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .history-table td, .history-table th { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--rule); text-align: left; }
+  .history-table th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 400; }
+  .history-table td.num { font-family: var(--mono); text-align: right; }
+  .kbd-help { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); line-height: 2; }
+  kbd { font-family: var(--mono); font-size: 0.7rem; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0.05rem 0.35rem; background: var(--card); }
+
+  /* PROGRESS */
+  .progress-wrap { margin-bottom: 1.5rem; font-family: var(--mono); }
+  .progress-label { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 0.5rem; }
+  .progress-label > span:first-child { white-space: nowrap; }
+  .progress-label .right { display: flex; gap: 1rem; align-items: baseline; min-width: 0; }
+  #q-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-bar { height: 4px; background: var(--paper-deep); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+  /* QUESTION CARD */
+  .question-card { background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 2rem 2rem 1.5rem; box-shadow: 0 4px 16px var(--shadow); margin-bottom: 1.5rem; position: relative; }
+  .question-card::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: var(--accent); }
+  .question-card.shake { animation: shake 0.3s; }
+  @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .question-meta { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .question-tag { display: inline-block; border: 1px solid var(--rule); padding: 0.1rem 0.5rem; border-radius: 2px; color: var(--ink-soft); background: var(--paper); letter-spacing: 0.08em; }
+  .question-text { font-family: var(--serif); font-size: 1.3rem; line-height: 1.45; margin-bottom: 1.3rem; }
+  .question-text em { color: var(--accent); }
+  .hint { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); margin: -0.6rem 0 1rem; }
+  .hint strong { color: var(--accent); }
+  .snippet { font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; background: var(--paper); border-left: 2px solid var(--ink-soft); padding: 1rem 1.2rem; margin: -0.3rem 0 1.2rem; overflow-x: auto; white-space: pre; }
+
+  /* OPTIONS */
+  .options { display: flex; flex-direction: column; gap: 0.6rem; }
+  .option { display: flex; align-items: flex-start; gap: 0.85rem; width: 100%; text-align: left; padding: 0.85rem 1rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; font-family: var(--serif); font-size: 1.05rem; line-height: 1.4; }
+  .option:hover:not(:disabled) { border-color: var(--ink); background: var(--card); }
+  .option:disabled { cursor: default; }
+  .option.selected { border-color: var(--accent); background: var(--accent-tint); }
+  .option.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .option.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .option.missed { border-color: var(--correct); border-style: dashed; }
+  .option-marker { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1.5px solid var(--ink-soft); flex-shrink: 0; margin-top: 0.12rem; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+  .marker-radio { border-radius: 50%; }
+  .marker-check { border-radius: 3px; }
+  .option.selected .option-marker { background: var(--accent); border-color: var(--accent); color: var(--on-strong); }
+  .option.correct .option-marker { background: var(--correct); border-color: var(--correct); color: var(--on-strong); }
+  .option.wrong .option-marker { background: var(--wrong); border-color: var(--wrong); color: var(--on-strong); }
+  .option.missed .option-marker { border-color: var(--correct); color: var(--correct); }
+  .option-text { flex: 1; }
+
+  /* TEXT */
+  .text-input, .text-area { width: 100%; padding: 0.85rem 1rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font-size: 1rem; }
+  .text-input { font-family: var(--mono); }
+  .text-area { font-family: var(--serif); font-size: 1.05rem; line-height: 1.5; resize: vertical; min-height: 7rem; }
+  .text-input:focus, .text-area:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  .text-input.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .text-input.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+
+  /* MATCH */
+  .match { display: flex; flex-direction: column; gap: 0.6rem; }
+  .match-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 0.6rem 1rem; align-items: center; padding: 0.7rem 0.9rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); }
+  .match-left { font-family: var(--serif); font-size: 1.05rem; font-weight: 500; }
+  .match-select { width: 100%; padding: 0.45rem 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); font-size: 0.92rem; }
+  .match-row.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .match-row.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .match-fb { grid-column: 1 / -1; font-size: 0.85rem; color: var(--correct); }
+  .match-fb:empty { display: none; }
+
+  /* ORDER */
+  .order { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .order-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0.8rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font-family: var(--serif); font-size: 1.05rem; }
+  .order-pos { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); width: 1.4rem; text-align: center; flex-shrink: 0; }
+  .order-text { flex: 1; }
+  .order-btns { display: flex; gap: 0.3rem; }
+  .order-btn { width: 2rem; height: 2rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); cursor: pointer; font-size: 0.75rem; }
+  .order-btn:hover:not(:disabled) { border-color: var(--ink); }
+  .order-btn:disabled { opacity: 0.3; cursor: default; }
+  .order-item.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .order-item.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .order-note { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+
+  /* FEEDBACK */
+  .feedback { margin-top: 1.2rem; padding: 1rem 1.2rem; border-radius: 3px; font-family: var(--serif); font-size: 1.05rem; line-height: 1.5; border-left: 3px solid var(--rule); background: var(--paper); }
+  .feedback.correct { background: var(--correct-tint); border-left-color: var(--correct); }
+  .feedback.wrong { background: var(--wrong-tint); border-left-color: var(--wrong); }
+  .feedback.partial { background: var(--partial-tint); border-left-color: var(--partial); }
+  .feedback-label { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.5rem; display: block; }
+  .feedback.correct .feedback-label { color: var(--correct); }
+  .feedback.wrong .feedback-label { color: var(--wrong); }
+  .feedback.partial .feedback-label { color: var(--partial); }
+  .fb-extra { margin-bottom: 0.6rem; }
+  .fb-extra ol, .fb-extra ul, .fb-explain ul, .fb-explain ol { margin: 0.3rem 0 0 1.4rem; }
+  .model-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0.2rem 0 0.35rem; }
+  .model-text { margin-bottom: 0.8rem; }
+  .model-points { margin: 0 0 0.6rem 1.3rem; }
+  .fb-explain { padding-top: 0.6rem; border-top: 1px solid var(--rule); margin-top: 0.4rem; }
+  .fb-extra:only-child, .fb-explain:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .grade-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
+  .grade-row span { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-soft); margin-right: 0.3rem; }
+  .btn-grade { border: 1.5px solid var(--rule); background: var(--card); padding: 0.5rem 0.9rem; border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 0.8rem; }
+  .btn-grade[data-g="correct"]:hover { border-color: var(--correct); color: var(--correct); }
+  .btn-grade[data-g="partial"]:hover { border-color: var(--partial); color: var(--partial); }
+  .btn-grade[data-g="wrong"]:hover { border-color: var(--wrong); color: var(--wrong); }
+
+  /* CONTROLS */
+  .controls { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .btn { font-family: var(--mono); font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.85rem 1.6rem; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; transition: all 0.15s ease; border-radius: 2px; }
+  .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-strong); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--ink); }
+  .btn-secondary:hover:not(:disabled) { background: var(--paper-deep); color: var(--ink); border-color: var(--ink); }
+  .btn-small { padding: 0.55rem 1rem; font-size: 0.75rem; }
+
+  /* RESULTS */
+  .results { text-align: center; padding: 2rem 0 1rem; }
+  .results-eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 1rem; }
+  .results-score { font-family: var(--serif); font-size: clamp(4rem, 12vw, 7rem); line-height: 1; font-weight: 600; margin-bottom: 0.5rem; }
+  .results-fraction { font-family: var(--serif); font-size: 1.2rem; color: var(--ink-soft); margin-bottom: 1.5rem; font-style: italic; }
+  .results-message { font-family: var(--serif); font-size: 1.25rem; max-width: 500px; margin: 0 auto 2rem; font-style: italic; color: var(--ink-soft); }
+  .results-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.8rem; max-width: 560px; margin: 0 auto 2rem; }
+  .stat { padding: 1rem 0.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+  .stat-num { font-family: var(--serif); font-size: 2rem; font-weight: 600; line-height: 1; margin-bottom: 0.3rem; }
+  .stat-label { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+  .stat.good .stat-num { color: var(--correct); }
+  .stat.bad .stat-num { color: var(--wrong); }
+  .stat.mid .stat-num { color: var(--partial); }
+  .section-title { font-family: var(--serif); font-size: 1.15rem; margin-bottom: 1rem; color: var(--ink-soft); font-style: italic; }
+  .cat-results { max-width: 560px; margin: 0 auto 2rem; text-align: left; }
+  .cat-row { padding: 0.65rem 1rem; margin-bottom: 0.45rem; background: var(--card); border: 1px solid var(--rule); border-radius: 3px; }
+  .cat-row-top { display: flex; justify-content: space-between; gap: 1rem; font-family: var(--serif); }
+  .cat-row-score { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); white-space: nowrap; }
+  .cat-row-score strong { color: var(--ink); }
+  .cat-bar { height: 3px; background: var(--paper-deep); border-radius: 2px; margin-top: 0.45rem; overflow: hidden; }
+  .cat-bar div { height: 100%; }
+  .results-actions { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+  .ornament { text-align: center; color: var(--rule); font-size: 1.5rem; margin: 1.5rem 0; letter-spacing: 1rem; }
+
+  /* REVIEW */
+  .review-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin: 3rem 0 1.5rem; }
+  .review-head h2 { font-family: var(--serif); font-size: 1.8rem; }
+  .review-filter { display: flex; gap: 0.4rem; }
+  .review-item { margin-bottom: 1.2rem; padding: 1.2rem 1.25rem; background: var(--card); border: 1px solid var(--rule); border-left-width: 3px; border-radius: 3px; }
+  .review-item.correct { border-left-color: var(--correct); }
+  .review-item.wrong, .review-item.skipped { border-left-color: var(--wrong); }
+  .review-item.partial { border-left-color: var(--partial); }
+  .review-meta { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.5rem; color: var(--ink-soft); }
+  .review-meta .st-correct { color: var(--correct); }
+  .review-meta .st-wrong, .review-meta .st-skipped { color: var(--wrong); }
+  .review-meta .st-partial { color: var(--partial); }
+  .review-q { font-family: var(--serif); font-size: 1.1rem; margin-bottom: 0.6rem; }
+  .review-line { font-size: 0.92rem; margin-bottom: 0.3rem; }
+  .review-line > em { color: var(--ink-soft); }
+  .review-block { margin: 0.25rem 0 0.2rem 1rem; }
+  .review-explain { font-size: 0.92rem; padding-top: 0.5rem; margin-top: 0.5rem; border-top: 1px solid var(--rule); color: var(--ink-soft); }
+
+  @media (max-width: 640px) {
+    .container { padding: 2rem 1rem 3rem; }
+    .question-card { padding: 1.5rem 1.1rem 1.2rem; }
+    .question-text { font-size: 1.15rem; }
+    .snippet { font-size: 0.72rem; }
+    .match-row { grid-template-columns: 1fr; }
+    .controls .btn { padding: 0.8rem 1.1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="header-eyebrow" id="h-eyebrow"></div>
+    <h1 id="h-title"></h1>
+    <div class="header-meta" id="h-meta"></div>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema claro/oscuro" title="Cambiar tema"></button>
+  </header>
+
+  <div id="errors-banner" class="banner hidden" role="alert"></div>
+
+  <!-- INICIO -->
+  <main id="start-screen">
+    <p class="start-info" id="start-desc"></p>
+
+    <section class="panel resume hidden" id="resume-panel">
+      <div class="panel-title">Intento sin terminar</div>
+      <p id="resume-text"></p>
+      <div class="start-actions" style="margin: 0;">
+        <button class="btn btn-small" id="btn-resume" type="button">Continuar →</button>
+        <button class="btn btn-secondary btn-small" id="btn-discard" type="button">Descartar</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <span>Temas</span>
+        <span class="links"><button class="link" id="cats-all" type="button">todos</button> · <button class="link" id="cats-none" type="button">ninguno</button></span>
+      </div>
+      <div class="chips" id="cat-chips"></div>
+      <div class="setup-row">
+        <label class="field">Cantidad<select id="opt-count"></select></label>
+        <label class="check"><input type="checkbox" id="opt-shuffle"> Mezclar orden de preguntas</label>
+        <label class="check" id="opt-open-wrap"><input type="checkbox" id="opt-open"> Incluir preguntas de desarrollo</label>
+      </div>
+      <div class="types-line" id="types-line"></div>
+    </section>
+
+    <div class="start-actions">
+      <button class="btn" id="btn-start" type="button">Empezar →</button>
+      <button class="btn btn-secondary hidden" id="btn-review-failed" type="button"></button>
+      <span class="selection-summary" id="selection-summary"></span>
+    </div>
+
+    <section class="panel hidden" id="history-panel">
+      <div class="panel-title"><span>Intentos anteriores</span><span class="links"><button class="link" id="btn-clear-history" type="button">borrar historial</button></span></div>
+      <table class="history-table" id="history-table"></table>
+    </section>
+
+    <p class="kbd-help">
+      Atajos: <kbd>1</kbd>–<kbd>9</kbd> elegir opción · <kbd>Enter</kbd> verificar / siguiente · <kbd>S</kbd> saltar · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> desde un texto de desarrollo
+    </p>
+  </main>
+
+  <!-- QUIZ -->
+  <main id="quiz-screen" class="hidden">
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Pregunta <span id="q-current">1</span> / <span id="q-total">1</span></span>
+        <span class="right"><span id="q-category"></span><button class="link" id="btn-finish" type="button">terminar</button></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    </div>
+
+    <article class="question-card" id="q-card"></article>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="btn-skip" type="button">Saltar</button>
+      <button class="btn" id="btn-action" type="button">Verificar</button>
+    </div>
+  </main>
+
+  <!-- RESULTADOS -->
+  <main id="results-screen" class="hidden">
+    <div class="results">
+      <div class="results-eyebrow" id="results-eyebrow">Resultado final</div>
+      <div class="results-score" id="results-score">0%</div>
+      <div class="results-fraction" id="results-fraction"></div>
+      <p class="results-message" id="results-message"></p>
+      <div class="results-stats" id="results-stats"></div>
+      <div class="ornament">· · ·</div>
+      <h3 class="section-title">Desempeño por tema</h3>
+      <div class="cat-results" id="cat-results"></div>
+      <div class="results-actions">
+        <button class="btn" id="btn-review" type="button">Revisar respuestas</button>
+        <button class="btn btn-secondary hidden" id="btn-retry-failed" type="button"></button>
+        <button class="btn btn-secondary" id="btn-home" type="button">Volver al inicio</button>
+      </div>
+    </div>
+
+    <section id="review-section" class="hidden">
+      <div class="review-head">
+        <h2>Revisión</h2>
+        <div class="review-filter">
+          <button class="chip" type="button" data-filter="all" aria-pressed="true">Todas</button>
+          <button class="chip" type="button" data-filter="failed" aria-pressed="false">Solo falladas</button>
+        </div>
+      </div>
+      <div id="review-list"></div>
+    </section>
+  </main>
+
+</div>
+
+<script>
+/* ═══════════════════════ MOTOR · no hace falta editar ═══════════════════════ */
+(function () {
+  'use strict';
+
+  // ───────── utilidades ─────────
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const parser = new DOMParser();
+  const plain = (html) => (parser.parseFromString(String(html ?? ''), 'text/html').body.textContent || '').trim();
+  const range = (n) => Array.from({ length: n }, (_, i) => i);
+  const isStr = (x) => typeof x === 'string' && x.trim() !== '';
+  const isIdx = (x, n) => Number.isInteger(x) && x >= 0 && x < n;
+  const fmtNum = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1).replace('.', ','));
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function hash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+    },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* sin almacenamiento */ } },
+    del(key) { try { localStorage.removeItem(key); } catch (e) { /* sin almacenamiento */ } }
+  };
+  const quizId = isStr(QUIZ.id) ? QUIZ.id : 'quiz';
+  const K = (name) => `quiz:${quizId}:${name}`;
+
+  // ───────── validación y banco ─────────
+  const TYPES = {
+    single: 'Opción única', multi: 'Opción múltiple', tf: 'Verdadero o falso', text: 'Respuesta corta',
+    match: 'Emparejar', order: 'Ordenar', open: 'Desarrollo'
+  };
+  const TYPE_PLURAL = {
+    single: 'opción única', multi: 'opción múltiple', tf: 'V/F', text: 'respuesta corta',
+    match: 'emparejar', order: 'ordenar', open: 'desarrollo'
+  };
+
+  function validate(q) {
+    if (!q || typeof q !== 'object') return ['no es un objeto'];
+    const e = [];
+    if (!isStr(q.cat)) e.push('falta "cat"');
+    if (!TYPES[q.type]) e.push(`"type" inválido (${q.type})`);
+    if (!isStr(q.text)) e.push('falta "text"');
+    const optsOk = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(isStr);
+    switch (q.type) {
+      case 'single':
+        if (!optsOk) e.push('"options" necesita al menos 2 textos');
+        else if (!isIdx(q.answer, q.options.length)) e.push('"answer" debe ser un índice válido de "options"');
+        break;
+      case 'multi':
+        if (!optsOk) e.push('"options" necesita al menos 2 textos');
+        else if (!Array.isArray(q.answer) || !q.answer.length || !q.answer.every((i) => isIdx(i, q.options.length)) || new Set(q.answer).size !== q.answer.length)
+          e.push('"answer" debe ser una lista de índices válidos, sin repetir');
+        break;
+      case 'tf':
+        if (typeof q.answer !== 'boolean') e.push('"answer" debe ser true o false');
+        break;
+      case 'text':
+        if (!Array.isArray(q.answers) || !q.answers.length || !q.answers.every(isStr)) e.push('"answers" debe ser una lista de respuestas aceptadas');
+        break;
+      case 'match':
+        if (!Array.isArray(q.pairs) || q.pairs.length < 2 || !q.pairs.every((p) => Array.isArray(p) && p.length === 2 && isStr(p[0]) && isStr(p[1])))
+          e.push('"pairs" debe ser una lista de al menos 2 pares [izquierda, derecha]');
+        else if (q.extra && (!Array.isArray(q.extra) || !q.extra.every(isStr))) e.push('"extra" debe ser una lista de textos');
+        else {
+          const rights = q.pairs.map((p) => plain(p[1])).concat((q.extra || []).map(plain));
+          if (new Set(rights).size !== rights.length) e.push('las opciones de la derecha (incluidas las de "extra") no pueden repetirse');
+        }
+        break;
+      case 'order':
+        if (!Array.isArray(q.items) || q.items.length < 2 || !q.items.every(isStr)) e.push('"items" debe ser una lista de al menos 2 elementos, en el orden correcto');
+        break;
+      case 'open':
+        if (!isStr(q.answer)) e.push('"answer" debe contener la respuesta modelo');
+        if (q.points && (!Array.isArray(q.points) || !q.points.every(isStr))) e.push('"points" debe ser una lista de textos');
+        break;
+    }
+    return e;
+  }
+
+  const BANK = [];
+  const ERRORS = [];
+  const usedIds = new Set();
+  (Array.isArray(QUESTIONS) ? QUESTIONS : []).forEach((q, n) => {
+    const errs = validate(q);
+    if (errs.length) {
+      ERRORS.push({ n: n + 1, text: plain(q && q.text).slice(0, 80), errs });
+      return;
+    }
+    let id = isStr(q.id) ? q.id : hash(q.type + '|' + plain(q.text));
+    while (usedIds.has(id)) id += '_';
+    usedIds.add(id);
+    BANK.push(Object.assign({}, q, { id, n }));
+  });
+  const BY_ID = new Map(BANK.map((q) => [q.id, q]));
+  const CATS = [...new Set(BANK.map((q) => q.cat))];
+  const HAS_OPEN = BANK.some((q) => q.type === 'open');
+  if (ERRORS.length) console.warn('Preguntas omitidas por errores de formato:', ERRORS);
+
+  // ───────── estado ─────────
+  let S = null;          // sesión en curso
+  let LAST = null;       // último resultado mostrado
+  let reviewFilter = 'all';
+  const card = $('#q-card');
+
+  const defaults = { cats: CATS.slice(), count: 'all', shuffle: true, open: true };
+  const settings = Object.assign({}, defaults, store.get(K('settings'), {}));
+  settings.cats = (settings.cats || []).filter((c) => CATS.includes(c));
+  if (!settings.cats.length) settings.cats = CATS.slice();
+  const saveSettings = () => store.set(K('settings'), settings);
+
+  const saveSession = () => { if (S) store.set(K('session'), S); };
+  const clearSession = () => store.del(K('session'));
+  const curQ = () => BY_ID.get(S.ids[S.cur]);
+
+  function loadSession() {
+    const s = store.get(K('session'), null);
+    if (!s || !Array.isArray(s.ids) || !s.ids.length || !s.ids.every((id) => BY_ID.has(id)) || !isIdx(s.cur, s.ids.length)) {
+      if (s) clearSession();
+      return null;
+    }
+    return s;
+  }
+
+  function recordStats(q, r) {
+    const st = store.get(K('qstats'), {});
+    const cur = st[q.id] || { seen: 0, ok: 0 };
+    cur.seen += 1;
+    if (r.status === 'correct') cur.ok += 1;
+    cur.last = r.status;
+    st[q.id] = cur;
+    store.set(K('qstats'), st);
+  }
+
+  function failedFromHistory() {
+    const st = store.get(K('qstats'), {});
+    return BANK.filter((q) => st[q.id] && st[q.id].last !== 'correct').map((q) => q.id);
+  }
+
+  // ───────── tema claro / oscuro ─────────
+  const root = document.documentElement;
+  const savedTheme = store.get('quiz:theme', null);
+  if (savedTheme === 'light' || savedTheme === 'dark') root.dataset.theme = savedTheme;
+  const effectiveTheme = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const paintToggle = () => { $('#theme-toggle').textContent = effectiveTheme() === 'dark' ? '☀' : '☾'; };
+  $('#theme-toggle').addEventListener('click', () => {
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    store.set('quiz:theme', next);
+    paintToggle();
+  });
+  paintToggle();
+
+  // ───────── pantallas ─────────
+  let screen = 'start';
+  function show(name) {
+    screen = name;
+    $('#start-screen').classList.toggle('hidden', name !== 'start');
+    $('#quiz-screen').classList.toggle('hidden', name !== 'quiz');
+    $('#results-screen').classList.toggle('hidden', name !== 'results');
+    window.scrollTo({ top: 0 });
+  }
+
+  // ───────── encabezado ─────────
+  document.title = plain(QUIZ.titulo || 'Quiz') + (QUIZ.subtitulo ? ' — ' + plain(QUIZ.subtitulo) : '');
+  $('#h-eyebrow').innerHTML = QUIZ.eyebrow || '';
+  $('#h-title').innerHTML = QUIZ.titulo || 'Quiz';
+  $('#h-meta').innerHTML =
+    `<span><strong>${BANK.length}</strong> preguntas</span>` +
+    (QUIZ.subtitulo ? `<span>${QUIZ.subtitulo}</span>` : '') +
+    `<span><strong>${CATS.length}</strong> ${CATS.length === 1 ? 'tema' : 'temas'}</span>`;
+
+  if (ERRORS.length) {
+    const b = $('#errors-banner');
+    b.innerHTML = `<strong>${ERRORS.length} ${ERRORS.length === 1 ? 'pregunta tiene' : 'preguntas tienen'} errores de formato y se omitieron:</strong><ul>` +
+      ERRORS.map((x) => `<li>#${x.n} «${esc(x.text)}…»: ${esc(x.errs.join('; '))}</li>`).join('') + '</ul>';
+    b.classList.remove('hidden');
+  }
+
+  // ───────── pantalla de inicio ─────────
+  function pool() {
+    return BANK.filter((q) => settings.cats.includes(q.cat) && (settings.open || q.type !== 'open'));
+  }
+
+  function renderStart() {
+    $('#start-desc').innerHTML = QUIZ.descripcion || '';
+
+    $('#cat-chips').innerHTML = CATS.map((c) => {
+      const n = BANK.filter((q) => q.cat === c && (settings.open || q.type !== 'open')).length;
+      return `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${settings.cats.includes(c)}">${esc(c)}<strong>${n}</strong></button>`;
+    }).join('');
+
+    $('#opt-shuffle').checked = !!settings.shuffle;
+    $('#opt-open').checked = !!settings.open;
+    $('#opt-open-wrap').classList.toggle('hidden', !HAS_OPEN);
+
+    const avail = pool().length;
+    const sizes = [10, 15, 20, 30, 40, 50, 75, 100].filter((n) => n < avail);
+    if (settings.count !== 'all' && !sizes.includes(settings.count)) settings.count = 'all';
+    $('#opt-count').innerHTML = sizes.map((n) => `<option value="${n}">${n}</option>`).join('') +
+      `<option value="all">Todas (${avail})</option>`;
+    $('#opt-count').value = String(settings.count);
+
+    const typeCounts = {};
+    pool().forEach((q) => { typeCounts[q.type] = (typeCounts[q.type] || 0) + 1; });
+    $('#types-line').textContent = Object.keys(TYPES).filter((t) => typeCounts[t]).map((t) => `${typeCounts[t]} ${TYPE_PLURAL[t]}`).join(' · ');
+
+    const n = settings.count === 'all' ? avail : Math.min(settings.count, avail);
+    $('#selection-summary').textContent = avail ? `${n} ${n === 1 ? 'pregunta' : 'preguntas'} · opciones mezcladas en cada intento` : 'Elegí al menos un tema';
+    $('#btn-start').disabled = avail === 0;
+
+    const failed = failedFromHistory();
+    const rf = $('#btn-review-failed');
+    rf.classList.toggle('hidden', !failed.length);
+    rf.textContent = `Repasar falladas (${failed.length})`;
+
+    const s = loadSession();
+    $('#resume-panel').classList.toggle('hidden', !s);
+    if (s) {
+      const answered = s.ids.filter((id) => s.resp[id]).length;
+      $('#resume-text').innerHTML = `${esc(s.label || 'Intento')}: vas por la pregunta <strong>${s.cur + 1}</strong> de <strong>${s.ids.length}</strong> (${answered} respondidas).`;
+    }
+
+    const hist = store.get(K('history'), []);
+    $('#history-panel').classList.toggle('hidden', !hist.length);
+    if (hist.length) {
+      $('#history-table').innerHTML = '<tr><th>Fecha</th><th>Tipo</th><th class="num">Preguntas</th><th class="num">Puntaje</th></tr>' +
+        hist.slice(0, 8).map((h) => `<tr><td>${esc(new Date(h.date).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }))}</td><td>${esc(h.label)}</td><td class="num">${h.n}</td><td class="num">${h.pct}%</td></tr>`).join('');
+    }
+  }
+
+  $('#cat-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const c = chip.dataset.cat;
+    settings.cats = settings.cats.includes(c) ? settings.cats.filter((x) => x !== c) : CATS.filter((x) => x === c || settings.cats.includes(x));
+    saveSettings(); renderStart();
+  });
+  $('#cats-all').addEventListener('click', () => { settings.cats = CATS.slice(); saveSettings(); renderStart(); });
+  $('#cats-none').addEventListener('click', () => { settings.cats = []; saveSettings(); renderStart(); });
+  $('#opt-count').addEventListener('change', (e) => { settings.count = e.target.value === 'all' ? 'all' : +e.target.value; saveSettings(); renderStart(); });
+  $('#opt-shuffle').addEventListener('change', (e) => { settings.shuffle = e.target.checked; saveSettings(); });
+  $('#opt-open').addEventListener('change', (e) => { settings.open = e.target.checked; saveSettings(); renderStart(); });
+  $('#btn-clear-history').addEventListener('click', () => {
+    if (!confirm('¿Borrar el historial de intentos y el registro de preguntas falladas?')) return;
+    store.del(K('history')); store.del(K('qstats')); renderStart();
+  });
+
+  // Selección proporcional por tema (resto mayor) cuando se piden menos preguntas que las disponibles.
+  function pick(questions, count, shuffleOrder) {
+    let chosen = questions;
+    if (count !== 'all' && count < questions.length) {
+      const groups = new Map();
+      questions.forEach((q) => { if (!groups.has(q.cat)) groups.set(q.cat, []); groups.get(q.cat).push(q); });
+      const quotas = [...groups.entries()].map(([cat, qs]) => {
+        const exact = (count * qs.length) / questions.length;
+        return { qs, take: Math.floor(exact), rem: exact - Math.floor(exact) };
+      });
+      let left = count - quotas.reduce((s, x) => s + x.take, 0);
+      quotas.slice().sort((a, b) => b.rem - a.rem).forEach((x) => { if (left > 0) { x.take++; left--; } });
+      chosen = quotas.flatMap((x) => shuffle(x.qs).slice(0, x.take));
+    }
+    return shuffleOrder ? shuffle(chosen) : chosen.slice().sort((a, b) => a.n - b.n);
+  }
+
+  function makePerm(q) {
+    if (q.type === 'single' || q.type === 'multi') return q.fixedOrder ? range(q.options.length) : shuffle(range(q.options.length));
+    if (q.type === 'match') return shuffle(range(q.pairs.length + (q.extra ? q.extra.length : 0)));
+    if (q.type === 'order') {
+      let p;
+      do { p = shuffle(range(q.items.length)); } while (p.every((v, i) => v === i));
+      return p;
+    }
+    return null;
+  }
+
+  function startSession(questions, label) {
+    if (!questions.length) return;
+    S = { ids: questions.map((q) => q.id), perms: {}, cur: 0, resp: {}, phase: 'answering', draft: '', started: Date.now(), label };
+    questions.forEach((q) => { const p = makePerm(q); if (p) S.perms[q.id] = p; });
+    saveSession();
+    show('quiz');
+    renderQuestion();
+  }
+
+  $('#btn-start').addEventListener('click', () => {
+    if (loadSession() && !confirm('Hay un intento sin terminar. ¿Descartarlo y empezar uno nuevo?')) return;
+    startSession(pick(pool(), settings.count, settings.shuffle), 'Práctica');
+  });
+  $('#btn-review-failed').addEventListener('click', () => {
+    if (loadSession() && !confirm('Hay un intento sin terminar. ¿Descartarlo y empezar el repaso?')) return;
+    const ids = failedFromHistory();
+    startSession(pick(BANK.filter((q) => ids.includes(q.id)), 'all', settings.shuffle), 'Repaso de falladas');
+  });
+  $('#btn-resume').addEventListener('click', () => {
+    S = loadSession();
+    if (!S) { renderStart(); return; }
+    show('quiz');
+    renderQuestion();
+  });
+  $('#btn-discard').addEventListener('click', () => { clearSession(); renderStart(); });
+
+  // ───────── pregunta ─────────
+  const matchRights = (q) => q.pairs.map((p) => p[1]).concat(q.extra || []);
+
+  function optionHTML(text, value, k, kind) {
+    return `<button type="button" class="option" role="${kind === 'multi' ? 'checkbox' : 'radio'}" aria-checked="false" data-v="${value}">` +
+      `<span class="option-marker ${kind === 'multi' ? 'marker-check' : 'marker-radio'}">${k < 9 ? k + 1 : ''}</span>` +
+      `<span class="option-text">${text}</span></button>`;
+  }
+
+  function orderItemHTML(text, orig) {
+    return `<li class="order-item" data-v="${orig}"><span class="order-pos"></span><span class="order-text">${text}</span>` +
+      `<span class="order-btns"><button type="button" class="order-btn" data-dir="-1" aria-label="Subir">▲</button>` +
+      `<button type="button" class="order-btn" data-dir="1" aria-label="Bajar">▼</button></span></li>`;
+  }
+
+  function renumberOrder() {
+    const items = $$('.order-item', card);
+    items.forEach((li, i) => {
+      $('.order-pos', li).textContent = i + 1;
+      const [up, down] = $$('.order-btn', li);
+      up.disabled = i === 0 || S.phase !== 'answering';
+      down.disabled = i === items.length - 1 || S.phase !== 'answering';
+    });
+  }
+
+  function renderQuestion() {
+    const q = curQ();
+    const total = S.ids.length;
+    const r = S.resp[q.id];
+    const perm = S.perms[q.id];
+    $('#q-current').textContent = S.cur + 1;
+    $('#q-total').textContent = total;
+    $('#q-category').textContent = q.cat;
+    $('#progress-fill').style.width = `${(S.ids.filter((id) => S.resp[id]).length / total) * 100}%`;
+
+    let h = `<div class="question-meta">Pregunta ${S.cur + 1}<span class="question-tag">${esc(q.cat)}</span><span class="question-tag">${TYPES[q.type]}</span></div>`;
+    h += `<div class="question-text">${q.text}</div>`;
+    if (q.code) h += `<pre class="snippet">${esc(q.code)}</pre>`;
+
+    switch (q.type) {
+      case 'single':
+      case 'multi':
+        if (q.type === 'multi') h += '<p class="hint">Marcá <strong>todas</strong> las correctas.</p>';
+        h += `<div class="options" role="${q.type === 'multi' ? 'group' : 'radiogroup'}">` +
+          perm.map((orig, k) => optionHTML(q.options[orig], orig, k, q.type)).join('') + '</div>';
+        break;
+      case 'tf':
+        h += `<div class="options" role="radiogroup">${optionHTML('Verdadero', 'true', 0, 'single')}${optionHTML('Falso', 'false', 1, 'single')}</div>`;
+        break;
+      case 'text':
+        h += '<input type="text" class="text-input" id="text-answer" placeholder="Tu respuesta…" autocomplete="off" spellcheck="false">';
+        break;
+      case 'match': {
+        const rights = matchRights(q);
+        h += `<p class="hint">Elegí la opción que corresponde a cada elemento${q.extra && q.extra.length ? ' · <strong>sobran opciones</strong>' : ''}.</p><div class="match">`;
+        q.pairs.forEach((p, li) => {
+          h += `<div class="match-row" data-i="${li}"><div class="match-left">${p[0]}</div>` +
+            `<select class="match-select" aria-label="Opción para ${esc(plain(p[0]))}"><option value="">Elegí…</option>` +
+            perm.map((ri) => `<option value="${ri}">${esc(plain(rights[ri]))}</option>`).join('') +
+            '</select><div class="match-fb"></div></div>';
+        });
+        h += '</div>';
+        break;
+      }
+      case 'order': {
+        const seq = r ? r.ua : perm;
+        h += '<p class="hint">Ordená con las flechas, del <strong>primero</strong> al <strong>último</strong>.</p>' +
+          '<ol class="order">' + seq.map((orig) => orderItemHTML(q.items[orig], orig)).join('') + '</ol>';
+        break;
+      }
+      case 'open':
+        h += '<textarea class="text-area" id="open-answer" placeholder="Escribí tu respuesta (opcional) y después compará con la respuesta modelo…"></textarea>';
+        break;
+    }
+    h += '<div id="feedback-area" aria-live="polite"></div>';
+    card.innerHTML = h;
+    if (q.type === 'order') renumberOrder();
+
+    if (r) {
+      S.phase = 'feedback';
+      applyFeedback(q, r);
+    } else if (S.phase === 'grading' && q.type === 'open') {
+      $('#open-answer').value = S.draft || '';
+      showGrading(q);
+    } else {
+      S.phase = 'answering';
+      if (q.type === 'text') $('#text-answer').focus();
+    }
+    updateControls();
+  }
+
+  card.addEventListener('click', (e) => {
+    const opt = e.target.closest('.option');
+    if (opt) { toggleOption(opt); return; }
+    const ob = e.target.closest('.order-btn');
+    if (ob && S.phase === 'answering') {
+      const li = ob.closest('.order-item');
+      if (+ob.dataset.dir < 0 && li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling);
+      if (+ob.dataset.dir > 0 && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
+      renumberOrder();
+      if (!ob.disabled) ob.focus(); else $('.order-btn:not(:disabled)', li)?.focus();
+      return;
+    }
+    const g = e.target.closest('.btn-grade');
+    if (g) gradeOpen(g.dataset.g);
+  });
+
+  function toggleOption(el) {
+    if (S.phase !== 'answering' || el.disabled) return;
+    const q = curQ();
+    if (q.type === 'multi') {
+      const on = el.getAttribute('aria-checked') !== 'true';
+      el.setAttribute('aria-checked', String(on));
+      el.classList.toggle('selected', on);
+    } else {
+      $$('.option', card).forEach((o) => { o.classList.remove('selected'); o.setAttribute('aria-checked', 'false'); });
+      el.classList.add('selected');
+      el.setAttribute('aria-checked', 'true');
+    }
+  }
+
+  function collect(q) {
+    switch (q.type) {
+      case 'single': { const s = $('.option.selected', card); return s ? +s.dataset.v : null; }
+      case 'tf': { const s = $('.option.selected', card); return s ? s.dataset.v === 'true' : null; }
+      case 'multi': { const v = $$('.option.selected', card).map((o) => +o.dataset.v).sort((a, b) => a - b); return v.length ? v : null; }
+      case 'text': { const v = $('#text-answer').value.trim(); return v || null; }
+      case 'match': { const v = $$('.match-select', card).map((s) => (s.value === '' ? null : +s.value)); return v.every((x) => x !== null) ? v : null; }
+      case 'order': return $$('.order-item', card).map((li) => +li.dataset.v);
+      case 'open': return $('#open-answer').value;
+    }
+    return null;
+  }
+
+  // Normaliza para comparar respuestas cortas: sin tildes, mayúsculas, signos ni artículo inicial.
+  function normText(s) {
+    return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim()
+      .replace(/^(el|la|los|las|un|una|unos|unas|lo|the)\s+/, '')
+      .replace(/\s+/g, '');
+  }
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    const prev = range(b.length + 1);
+    for (let i = 1; i <= a.length; i++) {
+      let diag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = prev[j];
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+        diag = tmp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  function matchText(ua, q) {
+    const u = normText(ua);
+    let best = null;
+    for (const a of q.answers) {
+      const n = normText(a);
+      if (u === n) return { ok: true, fuzzy: false, matched: a };
+      if (q.exact) continue;
+      const tol = n.length <= 4 ? 0 : n.length <= 8 ? 1 : 2;
+      const d = levenshtein(u, n);
+      if (d <= tol && (!best || d < best.d)) best = { d, a };
+    }
+    return best ? { ok: true, fuzzy: true, matched: best.a } : { ok: false };
+  }
+
+  function grade(q, ua) {
+    let ok = false;
+    const info = {};
+    switch (q.type) {
+      case 'single':
+      case 'tf':
+        ok = ua === q.answer;
+        break;
+      case 'multi': {
+        const c = q.answer.slice().sort((a, b) => a - b);
+        ok = ua.length === c.length && ua.every((v, i) => v === c[i]);
+        info.hits = ua.filter((v) => q.answer.includes(v)).length;
+        info.extra = ua.length - info.hits;
+        break;
+      }
+      case 'text': Object.assign(info, matchText(ua, q)); ok = info.ok; break;
+      case 'match':
+      case 'order':
+        info.hits = ua.filter((v, i) => v === i).length;
+        ok = info.hits === ua.length;
+        break;
+    }
+    return { status: ok ? 'correct' : 'wrong', score: ok ? 1 : 0, ua, info };
+  }
+
+  function nudge(msg) {
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
+    if (msg) $('#feedback-area').innerHTML = `<p class="hint" style="margin: 1rem 0 0;">${msg}</p>`;
+  }
+
+  function onAction() {
+    if (!S || screen !== 'quiz') return;
+    const q = curQ();
+    if (S.phase === 'answering') {
+      const ua = collect(q);
+      if (q.type === 'open') {
+        S.draft = ua;
+        S.phase = 'grading';
+        saveSession();
+        showGrading(q);
+        updateControls();
+        return;
+      }
+      if (ua === null) {
+        nudge(q.type === 'match' ? 'Completá <strong>todos</strong> los pares antes de verificar.' : '');
+        return;
+      }
+      const r = grade(q, ua);
+      commit(q, r);
+      applyFeedback(q, r);
+      updateControls();
+    } else if (S.phase === 'feedback') {
+      next();
+    }
+  }
+
+  function commit(q, r) {
+    S.resp[q.id] = r;
+    S.phase = 'feedback';
+    recordStats(q, r);
+    saveSession();
+    $('#progress-fill').style.width = `${(S.ids.filter((id) => S.resp[id]).length / S.ids.length) * 100}%`;
+  }
+
+  function next() {
+    if (S.cur < S.ids.length - 1) {
+      S.cur++;
+      S.phase = 'answering';
+      S.draft = '';
+      saveSession();
+      renderQuestion();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      finish();
+    }
+  }
+
+  function skip() {
+    if (!S || S.phase !== 'answering') return;
+    const q = curQ();
+    const r = { status: 'skipped', score: 0, ua: null, info: {} };
+    S.resp[q.id] = r;
+    recordStats(q, r);
+    next();
+  }
+
+  function updateControls() {
+    const q = curQ();
+    const act = $('#btn-action');
+    const isLast = S.cur === S.ids.length - 1;
+    act.disabled = S.phase === 'grading';
+    if (S.phase === 'answering') act.textContent = q.type === 'open' ? 'Ver respuesta modelo' : 'Verificar';
+    else if (S.phase === 'grading') act.textContent = 'Elegí cómo te fue ↑';
+    else act.textContent = isLast ? 'Ver resultados →' : 'Siguiente →';
+    $('#btn-skip').disabled = S.phase !== 'answering';
+  }
+
+  // ───────── desarrollo: respuesta modelo y autoevaluación ─────────
+  function modelHTML(q) {
+    return '<div class="model"><div class="model-label">Respuesta modelo</div>' +
+      `<div class="model-text">${q.answer}</div>` +
+      (q.points && q.points.length ? `<div class="model-label">Puntos clave que no pueden faltar</div><ul class="model-points">${q.points.map((p) => `<li>${p}</li>`).join('')}</ul>` : '') +
+      '</div>';
+  }
+
+  function showGrading(q) {
+    $('#open-answer').readOnly = true;
+    $('#feedback-area').innerHTML = `<div class="feedback">${modelHTML(q)}` +
+      (q.explain ? `<div class="fb-explain">${q.explain}</div>` : '') +
+      '<div class="grade-row"><span>¿Cómo te fue?</span>' +
+      '<button type="button" class="btn-grade" data-g="correct">1 · Lo sabía</button>' +
+      '<button type="button" class="btn-grade" data-g="partial">2 · A medias</button>' +
+      '<button type="button" class="btn-grade" data-g="wrong">3 · No lo sabía</button></div></div>';
+  }
+
+  function gradeOpen(g) {
+    if (!S || S.phase !== 'grading') return;
+    const q = curQ();
+    const r = { status: g, score: g === 'correct' ? 1 : g === 'partial' ? 0.5 : 0, ua: S.draft || '', info: {} };
+    commit(q, r);
+    applyFeedback(q, r);
+    updateControls();
+    $('#btn-action').focus();
+  }
+
+  // ───────── corrección visual ─────────
+  function mark(el, cls, sym) {
+    el.classList.add(cls);
+    const m = $('.option-marker', el);
+    if (m) m.textContent = sym;
+  }
+
+  function applyFeedback(q, r) {
+    const ua = r.ua;
+    switch (q.type) {
+      case 'single':
+      case 'tf': {
+        const correctV = String(q.answer);
+        $$('.option', card).forEach((el) => {
+          el.disabled = true;
+          el.classList.remove('selected');
+          const v = el.dataset.v;
+          if (v === correctV) mark(el, 'correct', '✓');
+          else if (ua !== null && v === String(ua)) mark(el, 'wrong', '✗');
+        });
+        break;
+      }
+      case 'multi': {
+        const user = new Set(ua || []);
+        $$('.option', card).forEach((el) => {
+          el.disabled = true;
+          el.classList.remove('selected');
+          const v = +el.dataset.v;
+          const inC = q.answer.includes(v);
+          if (inC && user.has(v)) mark(el, 'correct', '✓');
+          else if (!inC && user.has(v)) mark(el, 'wrong', '✗');
+          else if (inC) mark(el, 'missed', '·');
+        });
+        break;
+      }
+      case 'text': {
+        const inp = $('#text-answer');
+        inp.value = ua ?? '';
+        inp.disabled = true;
+        inp.classList.add(r.status === 'correct' ? 'correct' : 'wrong');
+        break;
+      }
+      case 'match': {
+        const rights = matchRights(q);
+        $$('.match-row', card).forEach((row, i) => {
+          const sel = $('.match-select', row);
+          sel.value = String(ua[i]);
+          sel.disabled = true;
+          const ok = ua[i] === i;
+          row.classList.add(ok ? 'correct' : 'wrong');
+          if (!ok) $('.match-fb', row).innerHTML = `✓ Correcta: ${esc(plain(rights[i]))}`;
+        });
+        break;
+      }
+      case 'order':
+        $$('.order-item', card).forEach((li, i) => {
+          const ok = +li.dataset.v === i;
+          li.classList.add(ok ? 'correct' : 'wrong');
+          const btns = $('.order-btns', li);
+          btns.innerHTML = ok ? '' : `<span class="order-note">va en ${+li.dataset.v + 1}.º</span>`;
+        });
+        break;
+      case 'open': {
+        const ta = $('#open-answer');
+        ta.value = ua || '';
+        ta.readOnly = true;
+        break;
+      }
+    }
+    $('#feedback-area').innerHTML = feedbackHTML(q, r);
+  }
+
+  function feedbackHTML(q, r) {
+    const labels = { correct: '✓ Correcto', wrong: '✗ Incorrecto', partial: '½ A medias' };
+    if (q.type === 'open') labels.correct = '✓ Lo sabías';
+    if (q.type === 'open') labels.wrong = '✗ A repasar';
+    let extra = '';
+    const i = r.info || {};
+    if (q.type === 'text') {
+      if (r.status === 'correct' && i.fuzzy) extra = `Aceptada con tolerancia a errores de tipeo. Forma esperada: <strong>${esc(i.matched)}</strong>.`;
+      else if (r.status !== 'correct') extra = `Respuesta esperada: <strong>${esc(q.answers[0])}</strong>.`;
+    } else if (q.type === 'multi' && r.status !== 'correct') {
+      extra = `Marcaste ${i.hits} de ${q.answer.length} correctas` + (i.extra ? ` y ${i.extra} incorrecta${i.extra > 1 ? 's' : ''}.` : '.');
+    } else if (q.type === 'match' && r.status !== 'correct') {
+      extra = `${i.hits} de ${q.pairs.length} pares correctos.`;
+    } else if (q.type === 'order' && r.status !== 'correct') {
+      extra = `${i.hits} de ${q.items.length} en su lugar. Orden correcto:<ol>${q.items.map((t) => `<li>${t}</li>`).join('')}</ol>`;
+    } else if (q.type === 'open') {
+      extra = modelHTML(q);
+    }
+    return `<div class="feedback ${r.status}"><span class="feedback-label">${labels[r.status]}</span>` +
+      (extra ? `<div class="fb-extra">${extra}</div>` : '') +
+      (q.explain ? `<div class="fb-explain">${q.explain}</div>` : '') + '</div>';
+  }
+
+  // ───────── resultados ─────────
+  function finish() {
+    const ids = S.ids.filter((id) => S.resp[id]);
+    const hist = store.get(K('history'), []);
+    clearSession();
+    if (!ids.length) { S = null; renderStart(); show('start'); return; }
+    LAST = { ids, resp: S.resp, total: S.ids.length, label: S.label };
+    const pts = ids.reduce((s, id) => s + S.resp[id].score, 0);
+    hist.unshift({ date: Date.now(), label: S.label, n: ids.length, pct: Math.round((pts / ids.length) * 100) });
+    store.set(K('history'), hist.slice(0, 30));
+    S = null;
+    renderResults();
+    show('results');
+  }
+
+  $('#btn-finish').addEventListener('click', () => {
+    const answered = S.ids.filter((id) => S.resp[id]).length;
+    const msg = answered
+      ? `¿Terminar ahora? El resultado se calcula con las ${answered} preguntas respondidas.`
+      : '¿Salir del intento? No respondiste ninguna pregunta todavía.';
+    if (confirm(msg)) finish();
+  });
+
+  function renderResults() {
+    const { ids, resp } = LAST;
+    const count = (st) => ids.filter((id) => resp[id].status === st).length;
+    const c = { correct: count('correct'), partial: count('partial'), wrong: count('wrong'), skipped: count('skipped') };
+    const pts = ids.reduce((s, id) => s + resp[id].score, 0);
+    const pct = Math.round((pts / ids.length) * 100);
+
+    $('#results-eyebrow').textContent = LAST.label === 'Repaso de falladas' ? 'Resultado del repaso' : 'Resultado final';
+    $('#results-score').textContent = pct + '%';
+    $('#results-fraction').textContent = (c.partial ? `${fmtNum(pts)} de ${ids.length} puntos` : `${c.correct} de ${ids.length} correctas`) +
+      (ids.length < LAST.total ? ` · terminado en la ${ids.length}.ª de ${LAST.total}` : '');
+
+    let msg;
+    if (pct >= 90) msg = 'Dominio sólido del material. Muy buen nivel para la evaluación.';
+    else if (pct >= 75) msg = 'Buen manejo general. Revisá las que fallaste para no llegar con huecos.';
+    else if (pct >= 60) msg = 'Tenés las ideas centrales, pero hay temas que merecen otra pasada.';
+    else if (pct >= 40) msg = 'Hay conceptos importantes para reforzar. Repasá el material y volvé a intentar.';
+    else msg = 'Conviene volver al material teórico antes de seguir practicando.';
+    $('#results-message').textContent = msg;
+
+    $('#results-stats').innerHTML =
+      `<div class="stat good"><div class="stat-num">${c.correct}</div><div class="stat-label">Correctas</div></div>` +
+      (c.partial ? `<div class="stat mid"><div class="stat-num">${c.partial}</div><div class="stat-label">A medias</div></div>` : '') +
+      `<div class="stat bad"><div class="stat-num">${c.wrong}</div><div class="stat-label">Incorrectas</div></div>` +
+      `<div class="stat"><div class="stat-num">${c.skipped}</div><div class="stat-label">Saltadas</div></div>`;
+
+    $('#cat-results').innerHTML = CATS.map((cat) => {
+      const cids = ids.filter((id) => BY_ID.get(id).cat === cat);
+      if (!cids.length) return '';
+      const cp = cids.reduce((s, id) => s + resp[id].score, 0);
+      const p = Math.round((cp / cids.length) * 100);
+      const color = p >= 75 ? 'var(--correct)' : p >= 50 ? 'var(--partial)' : 'var(--wrong)';
+      return `<div class="cat-row"><div class="cat-row-top"><span>${esc(cat)}</span><span class="cat-row-score"><strong>${fmtNum(cp)}/${cids.length}</strong> · ${p}%</span></div>` +
+        `<div class="cat-bar"><div style="width: ${p}%; background: ${color};"></div></div></div>`;
+    }).join('');
+
+    const failed = ids.filter((id) => resp[id].status !== 'correct');
+    const rb = $('#btn-retry-failed');
+    rb.classList.toggle('hidden', !failed.length);
+    rb.textContent = `Repasar falladas (${failed.length})`;
+
+    reviewFilter = 'all';
+    $('#review-section').classList.add('hidden');
+  }
+
+  function uaString(q, r) {
+    if (r.status === 'skipped') return '—';
+    switch (q.type) {
+      case 'single': return q.options[r.ua];
+      case 'tf': return r.ua ? 'Verdadero' : 'Falso';
+      case 'multi': return r.ua.map((i) => q.options[i]).join(' · ');
+      case 'text': return esc(r.ua);
+      case 'match': { const rights = matchRights(q); return q.pairs.map((p, i) => `${p[0]} → ${rights[r.ua[i]]}`).join('<br>'); }
+      case 'order': return r.ua.map((v, i) => `${i + 1}. ${q.items[v]}`).join('<br>');
+      case 'open': return r.ua && r.ua.trim() ? esc(r.ua).replace(/\n/g, '<br>') : '<em>(sin escribir)</em>';
+    }
+    return '';
+  }
+
+  function correctString(q) {
+    switch (q.type) {
+      case 'single': return q.options[q.answer];
+      case 'tf': return q.answer ? 'Verdadero' : 'Falso';
+      case 'multi': return q.answer.map((i) => q.options[i]).join(' · ');
+      case 'text': return esc(q.answers[0]);
+      case 'match': return q.pairs.map((p) => `${p[0]} → ${p[1]}`).join('<br>');
+      case 'order': return q.items.map((t, i) => `${i + 1}. ${t}`).join('<br>');
+      case 'open': return modelHTML(q);
+    }
+    return '';
+  }
+
+  // En emparejar, ordenar y desarrollo la respuesta ocupa varias líneas: va en un bloque aparte.
+  function reviewLine(label, html, q) {
+    const block = ['match', 'order', 'open'].includes(q.type) && html !== '—';
+    return `<div class="review-line"><em>${label}:</em>${block ? `<div class="review-block">${html}</div>` : ` ${html}`}</div>`;
+  }
+
+  function renderReview() {
+    const { ids, resp } = LAST;
+    const names = { correct: 'Correcta', wrong: 'Incorrecta', partial: 'A medias', skipped: 'Saltada' };
+    const list = ids.map((id, i) => ({ q: BY_ID.get(id), r: resp[id], i }))
+      .filter((x) => reviewFilter === 'all' || x.r.status !== 'correct');
+    $('#review-list').innerHTML = list.length ? list.map(({ q, r, i }) =>
+      `<div class="review-item ${r.status}">` +
+        `<div class="review-meta"><span class="st-${r.status}">${names[r.status]}</span> · ${esc(q.cat)} · ${TYPES[q.type]} · Pregunta ${i + 1}</div>` +
+        `<div class="review-q">${q.text}</div>` +
+        (q.code ? `<pre class="snippet">${esc(q.code)}</pre>` : '') +
+        reviewLine('Tu respuesta', uaString(q, r), q) +
+        (q.type === 'open'
+          ? `<div class="review-line">${correctString(q)}</div>`
+          : reviewLine('Correcta', correctString(q), q)) +
+        (q.explain ? `<div class="review-explain">${q.explain}</div>` : '') +
+      '</div>').join('') : '<p class="start-info">No hay preguntas falladas en este intento. 🎯</p>';
+  }
+
+  $('#btn-review').addEventListener('click', () => {
+    const sec = $('#review-section');
+    sec.classList.toggle('hidden');
+    if (!sec.classList.contains('hidden')) { renderReview(); sec.scrollIntoView({ behavior: 'smooth' }); }
+  });
+  $$('#review-section [data-filter]').forEach((b) => b.addEventListener('click', () => {
+    reviewFilter = b.dataset.filter;
+    $$('#review-section [data-filter]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    renderReview();
+  }));
+  $('#btn-retry-failed').addEventListener('click', () => {
+    const failed = LAST.ids.filter((id) => LAST.resp[id].status !== 'correct');
+    startSession(pick(failed.map((id) => BY_ID.get(id)), 'all', settings.shuffle), 'Repaso de falladas');
+  });
+  $('#btn-home').addEventListener('click', () => { renderStart(); show('start'); });
+
+  // ───────── botones y teclado ─────────
+  $('#btn-action').addEventListener('click', onAction);
+  $('#btn-skip').addEventListener('click', skip);
+
+  document.addEventListener('keydown', (e) => {
+    if (screen !== 'quiz' || !S || e.altKey || e.metaKey) return;
+    const t = e.target;
+    const tag = t.tagName;
+    if (tag === 'TEXTAREA') {
+      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); onAction(); }
+      return;
+    }
+    if (tag === 'INPUT') {
+      if (e.key === 'Enter') { e.preventDefault(); onAction(); }
+      return;
+    }
+    if (tag === 'SELECT' || e.ctrlKey) return;
+    if (e.key === 'Enter') {
+      if (tag === 'BUTTON' && !t.classList.contains('option') && t.id !== 'btn-action') return; // que el botón haga lo suyo
+      e.preventDefault();
+      onAction();
+      return;
+    }
+    const q = curQ();
+    if (/^[1-9]$/.test(e.key)) {
+      const k = +e.key - 1;
+      if (S.phase === 'answering' && ['single', 'multi', 'tf'].includes(q.type)) {
+        const opts = $$('.option', card);
+        if (opts[k]) { e.preventDefault(); toggleOption(opts[k]); }
+      } else if (S.phase === 'grading' && k < 3) {
+        e.preventDefault();
+        gradeOpen(['correct', 'partial', 'wrong'][k]);
+      }
+      return;
+    }
+    if ((e.key === 's' || e.key === 'S') && S.phase === 'answering') { e.preventDefault(); skip(); }
+  });
+
+  renderStart();
+})();
+</script>
+</body>
+</html>
