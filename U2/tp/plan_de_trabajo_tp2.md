@@ -74,7 +74,7 @@ Todo indica que la guía existe y no se compartió. El bloque mal pegado al prin
 | Series | 89 libros en 67 series (Harry Potter: 4 tomos) | El problema del "tomo 1 → tomos 2 a 7" de la parte avanzada de recomendación |
 | Autores | Stephen King 12, Brandon Sanderson 9, Sarah J. Maas 5 | Riesgo de que "similar" signifique "del mismo autor" |
 | Gallego o catalán | Ninguna sinopsis con una heurística simple | Confirmarlo con `langdetect` (U3) y reportarlo |
-| Duplicados | 0 títulos repetidos, 1 sinopsis repetida | Revisar ese caso |
+| Libros repetidos | 5 pares: *1984*, *Cien años de soledad* y *Rebelión en la granja* (dos ediciones, con sinopsis distintas); *El imperio final* (y su edición revisada); *Sapiens* = *De animales a dioses* (sinopsis idéntica) | En `queries.json`, las dos ediciones son relevantes. Los pares con sinopsis distintas son una **prueba natural** para la parte D: un buen modelo semántico debería ponerlos cerca. En recomendación, la otra edición es lo primero que hay que excluir |
 
 ## 5. Plan por partes
 
@@ -185,7 +185,8 @@ Lo que pide: una tabla por modelo (`vector(300)` para word vectors, `vector(512)
 3. **k de precision@k:** propongo 5 y, si suma, también 10.
 4. **Segundo modelo de oración:** ¿agregamos e5-small, además de `distiluse`?
 5. **Promedio de word vectors para la tabla de la fase 2:** ¿SBW o el modelo propio? Probablemente SBW, por la cantidad de datos, pero lo decide la parte B.
-6. **Reparto del trabajo** entre los cuatro integrantes (sección 10).
+6. **Libros repetidos:** ¿dejamos los 5 pares en el corpus (y los anotamos juntos en `queries.json`) o sacamos una edición de cada uno? Propongo dejarlos: son 200 libros, el TP1 entregó ese corpus, y los pares sirven como prueba.
+7. **Reparto del trabajo** entre los cuatro integrantes (sección 10).
 
 ## 9. Preguntas para la cátedra
 
@@ -199,7 +200,7 @@ Lo que pide: una tabla por modelo (`vector(300)` para word vectors, `vector(512)
 
 | Paso | Qué | Depende de | Paralelizable |
 |---|---|---|---|
-| 1 | Bajar SBW · leer el corpus · **escribir `queries.json`** | — | Sí: las consultas se reparten. Para elegir consultas y relevantes, se puede armar un **listado del corpus** (título, géneros y resumen breve de cada libro) |
+| 1 | Bajar SBW · leer el corpus · **escribir `queries.json`** | — | Sí: las consultas se reparten. Para elegir consultas y relevantes está el **[listado del corpus](listado_corpus_tp2.md)**, con un índice por género y una ficha por libro |
 | 2 | Parte 0 y parte A | 1 | — |
 | 3 | TF-IDF, `buscar()` en numpy y evaluación con el piso de azar | 2 | Sí, con el paso 4 |
 | 4 | Parte B (Word2Vec y SBW) y parte C (SBERT) | 2 | Sí: una persona cada una |
