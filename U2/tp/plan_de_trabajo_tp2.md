@@ -17,13 +17,41 @@ El TP pide representar las sinopsis del corpus del TP1 con **embeddings** (palab
 
 **Lo que más pesa:** el rigor de la evaluación (30 %): líneas de base, límites de la métrica y una interpretación que los resultados sostengan. Un pipeline que corre, sin piso de azar y sin discusión, saca menos que uno con peores resultados bien analizados.
 
+## Estado del avance
+
+Notebook: `PLN_TUIA/P2/TP2_calabozo_giuntoli_darruiz_dicarlo.ipynb` (ejecutado, todavía sin commitear en el repo del grupo).
+
+| Parte | Estado |
+|---|---|
+| 0 · Análisis inicial (las cuatro preguntas) | ✅ |
+| A · Corpus en dos versiones | ✅ |
+| Línea de base TF-IDF y `buscar(consulta, modelo, k, genero)` | ✅ |
+| B · Word2Vec propio contra SBW | ✅ |
+| C · SBERT (`distiluse`) y truncado | ✅ |
+| D · Similitudes al azar, prueba de las ediciones y proyección 2D | ✅ |
+| D · Rankings lado a lado para 3 consultas | ⏳ Necesita `queries.json` |
+| Evaluación con precision@k | ⏳ Código listo; necesita `queries.json` |
+| E, F · pgvector y SQL | ⏳ Fase 2 |
+| Parte avanzada | ⏳ A definir |
+
+**Hallazgos hasta ahora** (detallados en el notebook):
+- **SBERT trunca 178 de las 200 sinopsis (89 %)** con su límite de 128 tokens, y en las truncadas no ve, en promedio, el 39 % final del texto.
+- **El Word2Vec propio aprende co-ocurrencias de cada libro, no significado.** Los vecinos de "guerra" salen todos de una sola saga de Sanderson.
+- **SBW tiene el sesgo de su corpus:** los vecinos de "familia" son familias biológicas.
+- **Con SBW, todo se parece a todo:** dos libros al azar dan 0,87 de similitud media, con un desvío de 0,04. SBERT es el espacio más repartido (0,22 ± 0,09).
+- **TF-IDF encuentra las cinco ediciones repetidas en el puesto 1**, por los nombres propios compartidos (*Winston*, *Smith*). Es un caso legítimo donde TF-IDF gana.
+- **En PCA, solo SBERT muestra regiones por género** (Fantástico, Romántico, Ciencia ficción). En TF-IDF, las dos componentes capturan solo duplicados.
+- **Los términos característicos de TF-IDF no se estabilizan con 200 sinopsis.** Además, el 88 % de los top 10 tienen empates que hay que desempatar de forma fija.
+
+**Próximo paso: escribir `queries.json`** (ver la sección 6 y el [listado del corpus](listado_corpus_tp2.md)). Con eso se completan los rankings de la parte D y la evaluación.
+
 ## 2. Qué tenemos y qué falta
 
 | Material | Estado |
 |---|---|
 | Corpus (`PLN_TUIA/P1/data/libros.csv`) | ✅ 200 libros, 13 columnas |
-| Entorno (`PLN_TUIA/P2/requirements.txt`) | ✅ gensim, sentence-transformers, nltk, psycopg, pgvector, python-dotenv |
-| Modelo `SBW-vectors-300-min5` (~1 GB) | ⬜ Falta bajarlo de [SBWCE](https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz) a `P2/models/` (ignorado por git) |
+| Entorno (`PLN_TUIA/P2/requirements.txt`) | ✅ gensim, sentence-transformers, nltk, psycopg, pgvector, python-dotenv; se sumó `langdetect` (Unidad 3) |
+| Modelo `SBW-vectors-300-min5` (~1 GB) | ✅ Bajado en `P2/models/` (ignorado por git) desde [SBWCE](https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz) |
 | **Notebook guía** `TP2_embeddings_busqueda_semantica.ipynb` | ❌ **No fue compartido** (ver abajo) |
 | **Anexo A** (cuenta y proyecto en Supabase) | ❌ No fue compartido |
 | Fecha de entrega | ❌ El enunciado la deja en blanco |
@@ -178,15 +206,18 @@ Lo que pide: una tabla por modelo (`vector(300)` para word vectors, `vector(512)
 
 **Recomendación:** Clustering o Recomendación. Las dos se pueden hacer ya, tienen base en las prácticas y generan discusión con nuestros propios datos.
 
-## 8. Decisiones pendientes del grupo
+## 8. Decisiones
 
-1. **Parte avanzada:** ¿Clustering o Recomendación?
-2. **Etiqueta para colorear y evaluar:** propongo usar el género más específico, dejando de lado "Novela" (que es un formato), o graficar un panel por género presente.
-3. **k de precision@k:** propongo 5 y, si suma, también 10.
-4. **Segundo modelo de oración:** ¿agregamos e5-small, además de `distiluse`?
-5. **Promedio de word vectors para la tabla de la fase 2:** ¿SBW o el modelo propio? Probablemente SBW, por la cantidad de datos, pero lo decide la parte B.
-6. **Libros repetidos:** ¿dejamos los 5 pares en el corpus (y los anotamos juntos en `queries.json`) o sacamos una edición de cada uno? Propongo dejarlos: son 200 libros, el TP1 entregó ese corpus, y los pares sirven como prueba.
-7. **Reparto del trabajo** entre los cuatro integrantes (sección 10).
+**Tomadas:**
+- **Libros repetidos:** se dejan los 5 pares en el corpus y se anotan juntos en `queries.json` (el notebook lo valida). Los pares con sinopsis distintas se usan como prueba en la parte D.
+- **Etiqueta para la proyección:** un panel por género presente, en lugar de elegir un solo género por libro. Respeta la multi-etiqueta y evita depender del orden alfabético.
+- **k de precision@k:** 5 (es un parámetro del notebook).
+- **Promedio de word vectors para la fase 2:** SBW. La parte B mostró que el Word2Vec propio no aprende significado con 200 sinopsis.
+
+**Pendientes:**
+1. **Parte avanzada:** Clustering o Recomendación. Las dos se pueden hacer en la fase 1; la decisión puede esperar a la evaluación.
+2. **Segundo modelo de oración:** ¿agregamos e5-small, además de `distiluse`? Su límite de 512 tokens evitaría casi todo el truncado de la parte C.
+3. **Reparto del trabajo** entre los cuatro integrantes (sección 10).
 
 ## 9. Preguntas para la cátedra
 
