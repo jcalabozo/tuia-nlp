@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Repo del TP (PLN_TUIA), clonado acá para trabajar al lado de los apuntes; tiene su propio git
+PLN_TUIA/
