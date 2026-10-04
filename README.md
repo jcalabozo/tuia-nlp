@@ -17,7 +17,7 @@ U2/
 ├── teoria/       apunte de la cátedra (exportado de Notion), resumen e imagenes/
 ├── practicas/    notebooks de práctica: la consigna original y la versión _resuelta
 │   └── data/     datasets que bajan las prácticas (no se suben al repo)
-└── tp/           enunciado del trabajo práctico y su plan de trabajo, si la unidad tiene uno
+└── tp/           enunciado del trabajo práctico, si la unidad tiene uno
 ```
 
 La práctica original de la cátedra se mantiene sin cambios. La versión resuelta está al lado, con el sufijo `_resuelta`: tiene el código y, después de cada ejercicio, una explicación de qué muestra el resultado y por qué.
@@ -93,7 +93,8 @@ python -m ipykernel install --user --name pln-tp2 --display-name "Python 3.12 (P
 ```
 
 - El corpus es `PLN_TUIA/P1/data/libros.csv` (200 libros, resultado del TP1).
-- El enunciado está en [U2/tp/Enunciado_TP2_embeddings.md](U2/tp/Enunciado_TP2_embeddings.md), y el plan de trabajo (qué hay que hacer, cómo, qué falta y los problemas del enunciado), en [U2/tp/plan_de_trabajo_tp2.md](U2/tp/plan_de_trabajo_tp2.md).
+- El enunciado está en [U2/tp/Enunciado_TP2_embeddings.md](U2/tp/Enunciado_TP2_embeddings.md), y hay una copia en `PLN_TUIA/P2/`.
+- El plan de trabajo (qué hay que hacer, cómo, qué falta y los problemas del enunciado) y el listado del corpus para escribir `queries.json` están en el repo del TP, en [`P2/docs/`](https://github.com/jcalabozo/PLN_TUIA/tree/main/P2/docs).
 - El modelo `SBW-vectors-300-min5` (~1 GB) se baja de [SBWCE](https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz) a `P2/models/`, que está ignorado.
 - Las credenciales de la base van en `P2/.env`, que tampoco se sube.
 
