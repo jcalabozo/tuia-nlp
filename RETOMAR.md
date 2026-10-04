@@ -2,14 +2,14 @@
 
 Instrucciones para Claude Code. El usuario hace `git pull` (o clona) este repo en la máquina nueva y te pasa este archivo. Tu trabajo: dejar el entorno igual que en la máquina anterior y seguir con las tareas pendientes.
 
-Escrito el 2026-10-04, al cambiar de máquina en medio de la tarea 2.
+Escrito el 2026-10-04, al cambiar de máquina en medio de la tarea 2. Actualizado ese mismo día en la máquina nueva: carpetas reorganizadas, README para compañeros y tarea 2 resuelta.
 
 ## Orden de trabajo
 
 1. Leé este archivo completo.
 2. Hacé la **puesta a punto** (sección 2) y verificá cada paso.
 3. Recreá la **configuración global y las memorias** (sección 3). En la máquina nueva no existen.
-4. Contale al usuario, en pocas líneas, cómo quedó todo y retomá la **tarea 2** (sección 5).
+4. Contale al usuario, en pocas líneas, cómo quedó todo y retomá la **tarea 3** (sección 6). La tarea 2 ya está resuelta (sección 5).
 
 ---
 
@@ -24,11 +24,12 @@ Escrito el 2026-10-04, al cambiar de máquina en medio de la tarea 2.
 
 ```
 1. TUIA/NLP/                  ← este repo: jcalabozo/tuia-nlp (público, personal)
-├── U1/  U2/  U3/             ← apunte (.md + imagenes/), resúmenes, prácticas (.ipynb)
+├── U1/  U2/  U3/             ← cada una con teoria/ (apunte + resumen + imagenes/),
+│                               practicas/ (consigna + _resuelta + data/) y tp/ (enunciado)
 ├── herramientas/notion_a_markdown.py
-├── quiz_nlp_u1_u2.html
+├── quizzes/quiz_nlp_u1_u2.html
 ├── requirements.txt          ← entorno para correr las prácticas
-├── .gitignore                ← ignora PLN_TUIA/, .venv/, U*/data/
+├── .gitignore                ← ignora PLN_TUIA/, .venv/, U*/practicas/data/
 └── PLN_TUIA/                 ← clon de jcalabozo/PLN_TUIA (público, GRUPAL), con su propio git
     ├── P1/                   ← TP1: scraper de Lectulandia + data/libros.csv (200 libros)
     └── P2/                   ← TP2: por ahora solo .gitignore y requirements.txt
@@ -60,9 +61,9 @@ uv pip install -r requirements.txt --python .venv/Scripts/python.exe
 .venv/Scripts/python.exe -m ipykernel install --user --name nlp-tuia --display-name "Python 3.12 (NLP TUIA)"
 
 # 3. Datos de las prácticas de U2 (ignorados por git; IDs públicos de Google Drive del curso)
-mkdir -p U2/data
-.venv/Scripts/python.exe -m gdown 147g4SlXZtguJ7LZ1-9zxaHiYXlTApqru -O U2/data/lectulandia_books.csv
-.venv/Scripts/python.exe -m gdown 1SxsCy9airq_1OaNKFVUu_SB7HGSTe_gk -O U2/data/embeddings_e5_small.zip
+mkdir -p U2/practicas/data
+.venv/Scripts/python.exe -m gdown 147g4SlXZtguJ7LZ1-9zxaHiYXlTApqru -O U2/practicas/data/lectulandia_books.csv
+.venv/Scripts/python.exe -m gdown 1SxsCy9airq_1OaNKFVUu_SB7HGSTe_gk -O U2/practicas/data/embeddings_e5_small.zip
 
 # 4. Entorno del TP2 + kernel
 cd PLN_TUIA/P2
@@ -72,8 +73,8 @@ uv pip install -r requirements.txt --python .venv/Scripts/python.exe
 ```
 
 **Verificación esperada:**
-- `U2/data/lectulandia_books.csv` mide unos 62 MB: 62.279 filas, con columnas `url, titulo, autor, autor_url, sinapsis, imagen_url, generos`.
-- `U2/data/embeddings_e5_small.zip` mide unos 82 MB. Contiene `embeddings.npy` (47.819 × 384), `metadata.csv` y `config.json`.
+- `U2/practicas/data/lectulandia_books.csv` mide unos 62 MB: 62.279 filas, con columnas `url, titulo, autor, autor_url, sinapsis, imagen_url, generos`.
+- `U2/practicas/data/embeddings_e5_small.zip` mide unos 82 MB. Contiene `embeddings.npy` (47.819 × 384), `metadata.csv` y `config.json`.
 - `PLN_TUIA/P1/data/libros.csv` tiene 200 filas y 13 columnas.
 - En el entorno de `NLP/`, `import sentence_transformers, sklearn, pandas, gdown, nbclient` funciona.
 - En el de `P2/`, `import gensim, sentence_transformers, sklearn, pandas, psycopg` funciona. En la máquina anterior quedaron gensim 4.4, sentence-transformers 6.1, numpy 2.5, pandas 3.0 y torch solo CPU.
@@ -104,9 +105,10 @@ Guardalas en tu memoria persistente, una por tema:
 - **Usuario:** el de la sección 1 (TUIA, voseo, carpetas por materia y unidad, usa quizzes y resúmenes para preparar parciales).
 - **Discutir antes de construir:** en pedidos grandes o de varias partes, primero presentá hallazgos y propuestas con preguntas numeradas y defaults recomendados, y esperá su OK. En tareas chicas, avanzá directo.
 - **Archivos de referencia:** si el usuario deja un archivo como ejemplo, es referencia. Mejorá lo reutilizable y reportá los problemas de su contenido, pero no lo reescribas.
-- **Exportar Notion:** `python herramientas/notion_a_markdown.py <url> U<n>`, desde `NLP/`. Genera `U<n>/<título>.md` y `U<n>/imagenes/`, usando solo la biblioteca estándar. Se validó regenerando U1 y U2. Si aparece `Aviso: tipo de bloque sin soporte`, hay que agregar ese tipo en `MarkdownWriter.render`.
+- **Exportar Notion:** `python herramientas/notion_a_markdown.py <url> U<n>/teoria`, desde la raíz del repo. Genera `U<n>/teoria/<título>.md` y `U<n>/teoria/imagenes/`, usando solo la biblioteca estándar. Se validó regenerando U1 y U2. Si aparece `Aviso: tipo de bloque sin soporte`, hay que agregar ese tipo en `MarkdownWriter.render`.
 - **Layout de repos:** el de la sección 1, con sus reglas sobre el repo grupal.
-- **Plantilla de quiz:** en la máquina anterior existe `1. TUIA/_plantillas/quiz/` (`quiz_template.html`, `validar_quiz.mjs`, `COMO_USAR.md`). **No está en git.** Si el usuario pide un quiz y la carpeta no existe, avisale. `quiz_nlp_u1_u2.html` (75 preguntas) se hizo con esa plantilla y sirve de ejemplo del motor.
+- **Herramientas y estilo de código:** usar solo herramientas que mencionó la cátedra (si hace falta otra, consultar antes). Código simple, claro y conciso, a nivel de estudiante que da sus primeros pasos en NLP, con comentarios en las partes intrincadas.
+- **Plantilla de quiz:** en la máquina anterior existe `1. TUIA/_plantillas/quiz/` (`quiz_template.html`, `validar_quiz.mjs`, `COMO_USAR.md`). **No está en git.** Si el usuario pide un quiz y la carpeta no existe, avisale. `quizzes/quiz_nlp_u1_u2.html` (75 preguntas) se hizo con esa plantilla y sirve de ejemplo del motor.
 
 ### Convenciones de commits
 
@@ -120,44 +122,31 @@ Guardalas en tu memoria persistente, una por tema:
 - Repo `tuia-nlp` creado y público, con U1, U2, U3 y el quiz.
 - **U3 exportada** desde Notion: `U3/Unidad 3 - Procesamiento del Lenguaje.md`, más 8 imágenes y la portada. Los dos notebooks de práctica de U3 los agregó el usuario, todavía sin revisar ni resolver.
 - **Exportador reutilizable** en `herramientas/notion_a_markdown.py`, documentado en el README.
-- Entornos, kernels y datos, como en la sección 2.
+- Entornos, kernels y datos, como en la sección 2. `nltk` se sumó a `requirements.txt` (las stopwords de NLTK son las que usa la cátedra).
+- **Estructura de carpetas** por unidad: `teoria/`, `practicas/` y `tp/` (elegida por el usuario). El quiz pasó a `quizzes/`.
+- **README** con instrucciones para que los compañeros clonen este repo y `PLN_TUIA` adentro, armen los entornos y bajen los datos.
+- **Tarea 2 resuelta** (sección 5).
 
 ---
 
-## 5. Tarea 2 (en curso): resolver las prácticas de U2 en notebooks nuevos
+## 5. Tarea 2 (resuelta el 2026-10-04): prácticas de U2 en notebooks nuevos
 
-**Pedido del usuario:** resolver las dos prácticas de U2 en notebooks **nuevos**, para tener el original como consigna y otro resuelto. Los originales no se tocan.
-
-| Original (consigna) | Resuelto (crear) |
+| Original (consigna, sin tocar) | Resuelto |
 |---|---|
-| `U2/practica_vectorizacion_frecuentista.ipynb` | `U2/practica_vectorizacion_frecuentista_resuelta.ipynb` |
-| `U2/practica_embeddings_semanticos.ipynb` | `U2/practica_embeddings_semanticos_resuelta.ipynb` |
+| `U2/practicas/practica_vectorizacion_frecuentista.ipynb` | `U2/practicas/practica_vectorizacion_frecuentista_resuelta.ipynb` |
+| `U2/practicas/practica_embeddings_semanticos.ipynb` | `U2/practicas/practica_embeddings_semanticos_resuelta.ipynb` |
 
-### Enfoque acordado
+- Cada resuelto tiene arriba una celda **📌 Notas** con cómo se ejecutó y los errores de consigna, y después de cada ejercicio una **📝 Interpretación**. Las celdas **Extra** no las pide la consigna.
+- Se ejecutaron con `nbclient`, el kernel `nlp-tuia` y `U2/practicas/` como carpeta de trabajo (práctica 1: ~110 s; práctica 2: ~60 s, con el ZIP ya bajado).
+- Se respetó la regla de herramientas de la cátedra: sin `sklearn.pipeline`; stopwords de NLTK y `unicodedata`, como en U1; t-SNE, como en el apunte de U2.
 
-- Copiar todas las celdas del original y reemplazar solo el cuerpo de cada función `TODO` por la solución. Se mantienen las firmas y las llamadas.
-- Después de cada ejercicio, agregar una celda markdown breve: **qué muestra el resultado y por qué**. Está pensado para estudiar para el examen, así que importa más la interpretación que el código.
-- Ejecutar los notebooks con el kernel `nlp-tuia` y con el directorio de trabajo en `U2/`, porque las rutas son `data/...`. Para que queden las salidas visibles, usar `nbclient`, que ya está instalado. Comentar la línea `!pip install` de la primera celda, que es de Colab.
-- Señalar en el propio notebook los **errores de consigna** que aparezcan (abajo van los ya detectados). Al usuario le interesa saberlos.
+**Hallazgos clave** (están explicados en los notebooks):
+- Los géneros de cada libro vienen en **orden alfabético** (100 %). Por eso el "2.º género" (práctica 1) y el `genero_principal` (práctica 2) son posiciones alfabéticas, no géneros con significado. En la práctica 1, el 76 % de la clase "Otros" son novelas ("Novela - Otros").
+- La consigna de la práctica 1 se escribió para el subconjunto de *Biografía* (464 libros: Crónica 171, Ensayo 74, Divulgación 60), no para el CSV completo.
+- Práctica 1: TF-IDF ~0,69 contra Count/One-Hot ~0,64; con etiquetas temáticas (Ciencia ficción, Policíaco, Romántico), el mismo modelo llega a 0,90. Las 2 componentes de SVD explican el 2 % de la varianza, no el 10–15 % que dice la consigna.
+- Práctica 2: 1.871 libros con **mojibake** (UTF-8 leído como Mac Roman) creaban 22 géneros fantasma (100 → 78), y hay 683 libros repetidos. Una celda Extra los repara con `encode("mac_roman").decode("utf-8")` y saca los repetidos antes de los ejercicios.
 
-### Práctica 1: vectorización frecuentista (8 ejercicios)
-
-Las funciones a completar son `preparar_dataset`, `explorar_corpus`, `analizar_one_hot`, `explorar_count_vectorizer`, `palabras_por_genero`, `comparar_vectorizadores`, `evaluar_mejor_modelo` y `visualizar_en_2d`.
-
-Hallazgos sobre los datos reales (`U2/data/lectulandia_books.csv`):
-- Hay 47.830 libros con sinopsis y géneros. `generos` separa los valores con `" - "`. Por libro: 53 tienen 1 género, 32.295 tienen 2, 12.333 tienen 3 y el resto, 4 o más.
-- **Error de consigna:** el markdown dice "~476 libros" y que los tres subgéneros más frecuentes son Crónica (~169), Ensayo (~78) y Divulgación (~59). Con el dataset real, el top del **2.º género** es Novela 16.634, Relato 2.892, **Otros** 2.704, Ensayo 2.623, Historia 2.569 y Policíaco 2.484. "Otros" es una etiqueta poco informativa para clasificar. Seguí la consigna literal (top 3 balanceado a 2.704 por clase), pero explicalo y, si suma, mostrá la alternativa.
-- **Error de consigna:** la Parte 8 se llama "PCA", pero usa `TruncatedSVD` sobre TF-IDF. Eso es LSA: no centra los datos, así que no es exactamente PCA. Aclararlo.
-
-### Práctica 2: embeddings semánticos (6 ejercicios)
-
-Las funciones a completar son `buscar_libros`, `libros_similares`, `similitud_generos`, `clustering_embeddings`, `mapa_semantico` y `comparar_e5_tfidf`.
-
-- Usa `intfloat/multilingual-e5-small` (384 dimensiones) con los prefijos `"query: "` para las consultas y `"passage: "` para los documentos. Los embeddings precalculados vienen en el ZIP. Usá `metadata.csv` del ZIP como `df_libros`, porque está alineado fila a fila con `embeddings.npy`.
-- La celda de la Parte 2 vectoriza los 47.819 libros. En CPU tarda bastante: protegela para que, si el ZIP existe, lo use en vez de recalcular. Los ejercicios 1 y 6 necesitan el modelo para codificar consultas (unos 470 MB, se baja la primera vez).
-- **Inconsistencia de consigna:** la intro dice "~118 MB" y la tabla dice "~450 MB en disco".
-- En el ejercicio 3 la consigna ya pide centrar los embeddings antes de calcular centroides. Mostrar el efecto de hacerlo y de no hacerlo es material útil para el examen.
-- Para las proyecciones 2D, trabajar sobre una muestra, porque t-SNE sobre 48 mil puntos es lento.
+**Para regenerarlos:** los scripts de armado quedaron en el scratchpad de la sesión, no en el repo. Si hubiera que rehacerlos, es más simple editar los notebooks resueltos y reejecutarlos con `nbclient`.
 
 ---
 
@@ -165,7 +154,7 @@ Las funciones a completar son `buscar_libros`, `libros_similares`, `similitud_ge
 
 **Pedido del usuario:** una vez resueltas las prácticas, armar un **plan de trabajo** que aclare las consignas del TP2, qué hay que hacer y cómo. El usuario avisa que el enunciado tiene errores, menciona cosas que no hicieron, está desprolijo y pide temas que todavía no vieron. **Presentale el plan antes de construir nada** y preguntale dónde guardarlo. Una opción por defecto es `PLN_TUIA/P2/docs/plan_de_trabajo.md`, como `P1/docs/`, pero ese repo es grupal: confirmá antes de commitear.
 
-- **Enunciado:** `U2/Enunciado_TP2_embeddings.md`.
+- **Enunciado:** `U2/tp/Enunciado_TP2_embeddings.md`.
 - **Corpus del TP:** `PLN_TUIA/P1/data/libros.csv`, de la categoría "Los más comentados" de Lectulandia. Columnas: `titulo, autores, generos (separados por " | "), serie, num_serie, sinopsis, url_libro, categoria_origen, fecha_extraccion, portada, cant_comentarios, otros_libros_autor, libros_serie`.
 - **Entregables:** `TP2_apellido1_apellido2.ipynb` ejecutado, `queries.json` (10 consultas o más con sus libros relevantes), `informe.pdf` (3 páginas como máximo) y la base en Supabase.
 
@@ -173,7 +162,8 @@ Problemas detectados en el enunciado (falta completarlos al leerlo con detalle):
 - La sección 4 arranca con un bloque pegado de otro material, con markdown escapado. Habla de "12 documentos", pero el corpus del TP1 tiene 200, y hace preguntas sueltas sobre multi-etiqueta, sesgo de sinopsis promocionales y libros en gallego o catalán.
 - Da por hecho un TF-IDF "del TP1" que en el repo no existe: P1 es solo el scraper. Ese baseline hay que construirlo.
 - Las partes E y F, el entregable 4 y la sección 3 piden Postgres, `pgvector`, HNSW, *opclass* y Supabase. Todavía no los vieron, y el Anexo A (Supabase) no fue compartido. La propia sección 3 dice "por el momento solo utilizan el csv y el DataFrame". El plan debería separar lo que se puede hacer ya de lo que queda para cuando vean bases vectoriales.
-- El "notebook guía" `TP2_embeddings_busqueda_semantica.ipynb` no fue compartido. Lo más parecido es `U2/practica_embeddings_semanticos.ipynb`, que usa e5-small, mientras que el TP pide arrancar con `distiluse-base-multilingual-cased-v1`.
+- El "notebook guía" `TP2_embeddings_busqueda_semantica.ipynb` no fue compartido. Lo más parecido es `U2/practicas/practica_embeddings_semanticos.ipynb`, que usa e5-small, mientras que el TP pide arrancar con `distiluse-base-multilingual-cased-v1`.
+  - **Ya se buscó en Notion (2026-10-04), sin resultado.** El usuario sugirió que podía estar en el Notion de U2. Se reexportó U2 (el contenido es igual al del repo; solo enlaza a YouTube y MTEB). La página padre de las unidades no es pública, y el único bloque `alias` de U2 apunta a una página inaccesible. Los Colab enlazados en U1 ("Cuaderno práctico de la unidad") y en U3 ("Comparación de Distribución de POS Tags") son otros notebooks. Habría que pedírselo a la cátedra o buscarlo en el campus.
 - El modelo `SBW-vectors-300-min5` (alrededor de 1 GB) se baja de `https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz`. Va en `P2/models/`, que está ignorado.
 - **Relación con U3:** métricas de similitud (coseno, Jaccard), clasificación con TF-IDF contra embeddings, detección de idioma (la pregunta del gallego o catalán), NER (el ejemplo de `Madrid` vs `madrid`) y LLM por instrucción (la parte avanzada de RAG).
 - `queries.json` es lo que más pesa y lo tiene que escribir el usuario, **antes** de ver resultados. Ya se le propuso armarle un listado del corpus (título, géneros y resumen breve) para que elija consultas y libros relevantes.
