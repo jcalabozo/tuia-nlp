@@ -5,7 +5,7 @@ Uso:
 
 Ejemplo:
     python herramientas/notion_a_markdown.py \
-        https://gentle-cress-e61.notion.site/Unidad-3-Procesamiento-del-Lenguaje-48b3f630e08a49e59bbcabfa39273e0c U3
+        https://gentle-cress-e61.notion.site/Unidad-3-Procesamiento-del-Lenguaje-48b3f630e08a49e59bbcabfa39273e0c U3/teoria
 
 Genera <carpeta-destino>/<título de la página>.md y <carpeta-destino>/imagenes/
 (portada.png, img-01.png, ...). Usa la API interna de notion.site, sin token ni
