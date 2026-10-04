@@ -8,3 +8,6 @@ Thumbs.db
 
 # Repo del TP (PLN_TUIA), clonado acá para trabajar al lado de los apuntes; tiene su propio git
 PLN_TUIA/
+
+# Datasets, embeddings y modelos que bajan las prácticas (pesados; se descargan de nuevo)
+U*/data/

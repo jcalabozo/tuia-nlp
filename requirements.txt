@@ -1,0 +1,11 @@
+pandas>=2.0
+numpy
+scipy
+scikit-learn
+matplotlib
+seaborn
+sentence-transformers>=3.0
+gdown
+ipykernel
+nbclient
+nbformat
