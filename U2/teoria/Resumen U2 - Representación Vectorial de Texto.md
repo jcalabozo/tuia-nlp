@@ -226,7 +226,7 @@ $$
 | Tipo | **Lineal**, determinista | **No lineal**, estocástico |
 | Qué preserva | Las direcciones de **máxima varianza** | Las **vecindades locales** (quién está cerca de quién) |
 | Para qué | Estructura global; dice cuánta varianza se explica | Ver **grupos** |
-| ⚠️ Cuidado | 2 componentes explican **poca varianza** (un 10–15 % en la práctica): puntos mezclados en 2D **no** implican que el espacio original no separe | Las **distancias entre clusters** y sus tamaños **no se interpretan**; dependen de la `perplexity` |
+| ⚠️ Cuidado | 2 componentes explican **muy poca varianza**: en las prácticas, un 2 % con TF-IDF y un 6 % con E5 (la consigna decía 10–15 %, y estaba mal). Puntos mezclados en 2D **no** implican que el espacio original no separe | Las **distancias entre clusters** y sus tamaños **no se interpretan**; dependen de la `perplexity` |
 
 - Para matrices **dispersas** (TF-IDF), la práctica usa **`TruncatedSVD`**, que cumple el rol de PCA sin densificar la matriz.
 - Ninguno usa etiquetas: el color por género se agrega **después**, y es información que el modelo **nunca vio**.
@@ -340,15 +340,232 @@ Esta es la parte que más pesa en el TP, y sirve como argumento en cualquier pre
 
 ## 8. Preguntas de desarrollo para practicar
 
-1. **Compará one-hot, Count, TF-IDF y Hashing:** qué representan, pros, contras y dimensión.
-2. **Explicá TF-IDF** con sus fórmulas y el papel del logaritmo. ¿Qué pasa con las stopwords?
-3. **¿Por qué los métodos frecuentistas no capturan semántica** y cómo lo resuelven los word embeddings? ¿Qué limitación queda y qué la resuelve?
-4. **Word2Vec:** CBOW contra Skip-gram, arquitectura, de dónde salen los vectores y para qué sirve el negative sampling.
-5. **FastText:** qué aporta y qué no resuelve.
-6. **Similitud coseno:** fórmula, interpretación y por qué se prefiere a la distancia euclidiana.
-7. **Sentence embeddings:** por qué no alcanza el promedio, cómo funciona SBERT y cómo elegir un modelo con MTEB.
-8. **¿Cómo evaluarías** si un buscador con embeddings es mejor que uno con TF-IDF? (Líneas de base, precision@k, consultas sin solapamiento léxico, límites de la métrica.)
-9. **PCA contra t-SNE** para visualizar, y qué advertencias hay que hacer al interpretarlos.
+> Intentá responder cada una antes de abrir la respuesta. Son respuestas modelo: cubren lo que se espera encontrar en un parcial.
+
+### 8.1 Compará one-hot, Count, TF-IDF y Hashing: qué representan, pros, contras y dimensión
+
+<details>
+<summary>Ver respuesta</summary>
+
+Los cuatro son métodos **frecuentistas**: producen vectores **dispersos** (casi todos ceros) basados en qué palabras aparecen.
+
+| | One-hot | Count Vectorizer | TF-IDF | Hashing |
+|---|---|---|---|---|
+| **Representa** | Una **palabra**: un 1 en su posición y 0 en el resto | Un **documento**: cuántas veces aparece cada palabra | Un **documento**: cada palabra pesada por frecuencia × rareza | Un documento (o palabra), con índices calculados por una función hash |
+| **Pros** | Muy simple | Tiene en cuenta la frecuencia | Baja el peso de las palabras comunes y sube el de las **discriminativas** | **No guarda vocabulario**: no necesita `fit`, sirve para streaming y textos nuevos |
+| **Contras** | Todas las palabras son **ortogonales** (sin similitud); no refleja frecuencia ni relevancia | **Sobrevalora** las palabras comunes («el», «la»); ignora el orden | Sigue siendo **léxico**: los sinónimos no se parecen | **Colisiones**; no es invertible (no se puede volver de la columna a la palabra) |
+| **Dimensión** | Tamaño del vocabulario | Tamaño del vocabulario | Tamaño del vocabulario | **Fija**: `n_features` (por ejemplo, 2<sup>18</sup>) |
+
+**Lo que tienen en común:**
+
+- **Ninguno captura semántica:** el coseno entre esos vectores mide coincidencia de palabras. «Una novela sobre piratas» y «un relato de bucaneros» tienen similitud **0**.
+- **Todos ignoran el orden:** «el perro muerde al hombre» y «el hombre muerde al perro» dan el mismo vector. Los n-gramas lo mitigan en parte.
+- **Producen vectores muy dispersos:** en la práctica, la matriz de sinopsis tenía un 99,86 % de ceros.
+
+**La evolución:** Count resuelve que one-hot no cuente frecuencias; TF-IDF resuelve que Count sobrevalore las palabras comunes; Hashing resuelve tener que guardar un vocabulario.
+
+</details>
+
+### 8.2 Explicá TF-IDF con sus fórmulas y el papel del logaritmo. ¿Qué pasa con las stopwords?
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Intuición:** una palabra es importante para un documento si aparece **mucho en él** y **poco en el resto** del corpus.
+
+**Fórmulas:**
+
+- **TF(t, d)** = veces que t aparece en d / total de términos de d. Mide la importancia **dentro** del documento.
+- **IDF(t, D)** = log(N / cantidad de documentos que contienen t). Mide la **rareza en el corpus**: si t aparece en los N documentos, IDF = log 1 = **0**.
+- **TF-IDF** = TF × IDF.
+
+sklearn usa por defecto una versión suavizada: IDF = ln((1 + N) / (1 + df)) + 1. Evita divisiones por cero y hace que una palabra presente en todos los documentos valga 1 en vez de 0.
+
+**El papel del logaritmo:** **amortigua** la escala. Sin él, una palabra que aparece en 1 documento de un millón tendría un peso de 1.000.000; con el logaritmo natural, ≈ 13,8. Así la rareza suma importancia, pero no domina por completo. Con `sublinear_tf=True`, se aplica el mismo criterio al TF, usando log(1 + tf), para que repetir mucho una palabra en un documento largo no lo domine.
+
+**Las stopwords:**
+
+- Como aparecen en casi todos los documentos, su **IDF es bajo** y su peso cae.
+- Pero **TF-IDF no las elimina**, y su TF es altísimo. En la práctica de U2, el TF-IDF promedio por género seguía dominado por «de», «la» y «que».
+- Por eso conviene igual quitarlas: reduce la dimensión, el ruido y el costo.
+- Con una advertencia: en tareas de matiz (sentimiento), «no», «pero» o «sin» cambian el sentido, y conviene una lista personalizada.
+
+</details>
+
+### 8.3 ¿Por qué los métodos frecuentistas no capturan semántica y cómo lo resuelven los word embeddings? ¿Qué limitación queda y qué la resuelve?
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Por qué no capturan semántica:** cada palabra es una **dimensión independiente**. «Perro» y «can» son columnas distintas y no tienen ninguna relación entre sí. Dos documentos solo se parecen si **comparten palabras**: «una novela sobre piratas» y «un relato de bucaneros» tienen similitud TF-IDF **0**, aunque digan lo mismo.
+
+**Cómo lo resuelven los word embeddings:** se basan en la **hipótesis distribucional**, que dice que las palabras que aparecen en **contextos similares** tienen **significados similares**.
+
+- Modelos como **Word2Vec** aprenden, a partir de un corpus grande, un vector **denso** de unas 300 dimensiones para cada palabra, de modo que las palabras parecidas quedan **cerca**.
+- Así, «pirata» y «bucanero» tienen vectores con coseno alto, y aparecen relaciones como **rey − hombre + mujer ≈ reina**.
+
+**Qué limitaciones quedan y qué las resuelve:**
+
+1. **Las palabras fuera del vocabulario (OOV)** no tienen vector. Lo resuelve **FastText**, que arma cada palabra con sus n-gramas de caracteres.
+2. **Son estáticos:** «banco» tiene un único vector, sea el financiero o el de la plaza (polisemia). Lo resuelven los **embeddings contextuales**, como **ELMo** y **BERT**, donde el vector depende de la oración.
+3. **Representan palabras, no oraciones:** promediar los vectores de una oración pierde el orden («this is cool» = «is this cool»). Lo resuelve **Sentence-BERT**, que produce un embedding de oración comparable con el coseno.
+
+</details>
+
+### 8.4 Word2Vec: CBOW contra Skip-gram, arquitectura, de dónde salen los vectores y para qué sirve el negative sampling
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Las dos variantes** son tareas de predicción sobre una ventana de contexto:
+
+| | **CBOW** | **Skip-gram** |
+|---|---|---|
+| Predice | La **palabra central** a partir del **contexto** | El **contexto** a partir de la **palabra central** |
+| Entrada | Las palabras de contexto (sus vectores se promedian) | Una palabra |
+| gensim | `sg=0` | `sg=1` |
+| Se dice que | Es más rápido y anda bien con palabras frecuentes | Aprende mejor las palabras poco frecuentes y los corpus chicos |
+
+**Arquitectura:** una red **superficial**.
+
+- La entrada es un **one-hot de tamaño V** (el vocabulario).
+- Hay una **capa oculta** de N neuronas: N es la dimensión del embedding, por ejemplo 300.
+- La salida es un **softmax de tamaño V**.
+- Hay dos matrices de pesos: **W (V × N)** y **W′ (N × V)**.
+
+**De dónde salen los vectores:** de los **pesos de la capa oculta**. Cada fila de W es el vector de una palabra, porque multiplicar un one-hot por W selecciona justamente esa fila. La predicción es solo una **excusa**: lo que interesa son los pesos que se aprenden para resolverla.
+
+**Hiperparámetros:** el tamaño de la **ventana** (cuántas palabras a cada lado cuentan como contexto), la dimensión, `min_count` y las épocas. Skip-gram **no distingue** si una palabra de contexto estaba a la izquierda o a la derecha: refleja co-ocurrencias, no gramática.
+
+**Negative sampling:** calcular el softmax sobre **todo el vocabulario** en cada paso es carísimo, porque hay que normalizar sobre cientos de miles de palabras. En su lugar, el modelo aprende una **clasificación binaria**: distinguir el par (palabra, contexto) **real** de unos pocos pares con palabras **«negativas»** elegidas al azar (por ejemplo, 5). Solo se actualizan los pesos de esas pocas palabras, y eso hace viable entrenar con corpus enormes.
+
+</details>
+
+### 8.5 FastText: qué aporta y qué no resuelve
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Qué aporta:** representa cada palabra como la **suma de los vectores de sus n-gramas de caracteres**. Con n = 3, «donde» se parte en `<do`, `don`, `ond`, `nde` y `de>`, donde `<` y `>` marcan el inicio y el fin de la palabra.
+
+- **Morfología:** «gato», «gatos» y «gatito» comparten n-gramas, así que sus vectores quedan cerca aunque alguna sea poco frecuente. Sirve mucho en idiomas con morfología rica, como el español.
+- **Palabras fuera del vocabulario (OOV):** una palabra que nunca apareció en el entrenamiento igual obtiene un vector, armado con sus n-gramas. Lo mismo pasa con errores de tipeo y neologismos. Word2Vec, en cambio, no tiene vector para una palabra que no vio.
+
+**Qué no resuelve:**
+
+- **Sigue siendo estático:** cada palabra tiene un solo vector, sin importar la oración. «Banco» (financiero) y «banco» (de plaza) son el mismo punto. La **polisemia** la resuelven los modelos **contextuales** (ELMo, BERT).
+- **Representa palabras, no oraciones:** para un documento hay que promediar, con las mismas pérdidas que en Word2Vec (el orden, las negaciones).
+
+</details>
+
+### 8.6 Similitud coseno: fórmula, interpretación y por qué se prefiere a la distancia euclidiana
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Fórmula:** cos(θ) = (A · B) / (‖A‖ ‖B‖). Es el producto escalar dividido por el producto de las normas: mide el **ángulo** entre los vectores, no su largo.
+
+**Interpretación:**
+
+- **1:** misma dirección (máxima similitud).
+- **0:** ortogonales (sin relación).
+- **−1:** direcciones opuestas.
+- **Puede ser negativa y no es una probabilidad.**
+- Con vectores frecuentistas (siempre positivos) queda entre 0 y 1.
+
+**Por qué se prefiere a la distancia euclidiana:**
+
+1. **Es invariante a la magnitud.** Un documento largo y uno corto sobre el mismo tema tienen vectores de distinto largo pero la misma dirección. La distancia euclidiana los vería lejos; el coseno, parecidos.
+2. **Funciona mejor en alta dimensión:** con cientos o miles de dimensiones, las distancias euclidianas tienden a parecerse todas (la maldición de la dimensionalidad).
+3. **Se interpreta fácil:** la escala es de −1 a 1.
+4. **Es eficiente:** con vectores normalizados (norma 1), se reduce a un producto escalar.
+
+**Una advertencia práctica:** los puntajes **no se comparan entre modelos**. En la práctica, con E5 dos libros cualesquiera ya daban entre 0,75 y 0,89. Lo que importa es el **orden** de los resultados, no el valor absoluto.
+
+</details>
+
+### 8.7 Sentence embeddings: por qué no alcanza el promedio, cómo funciona SBERT y cómo elegir un modelo con MTEB
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Por qué no alcanza promediar los vectores de las palabras:**
+
+- **Pierde el orden:** el promedio es conmutativo, así que «this is cool» e «is this cool» dan similitud 1,0.
+- **Diluye el significado:** las palabras importantes pesan lo mismo que las accesorias, y en textos largos todos los promedios tienden a parecerse. En el TP, con SBW, dos libros al azar daban 0,87 de similitud.
+- **Pierde las negaciones y los modificadores.**
+- **Los parches** (ponderar con TF-IDF, quitar stopwords, agregar n-gramas) ayudan, pero no resuelven el fondo.
+
+**Cómo funciona Sentence-BERT:**
+
+- Modifica BERT con **redes siamesas y tripletas**: dos ramas con los **mismos pesos** codifican cada oración por separado, y se entrena para que las oraciones con el mismo significado queden **cerca según el coseno**.
+- Así produce **un vector de tamaño fijo por oración**, comparable directamente.
+- **Frente al cross-encoder de BERT:** el cross-encoder procesa **cada par** de oraciones junto, y la cantidad de pares crece de forma cuadrática. SBERT codifica **cada oración una sola vez** y después compara con el coseno. En el paper, buscar el par más parecido entre 10.000 oraciones pasa de unas 65 horas a unos 5 segundos.
+- **Limitación:** tiene un **límite de tokens**, y lo que lo supera se trunca **sin aviso**. En el TP, `distiluse` (128 tokens) truncaba el 89 % de las sinopsis.
+
+**Cómo elegir con MTEB:** MTEB es un **benchmark**, no un modelo. Evalúa modelos de embeddings en 8 tareas (retrieval, STS, clustering, clasificación…), con 58 datasets y 112 idiomas, y tiene un leaderboard público.
+
+1. Mirar las tareas que importan para el caso: **retrieval** para un buscador, **STS** para similitud.
+2. Filtrar los modelos **multilingües o entrenados en español**.
+3. Considerar el **tamaño** (RAM, latencia, costo) y el **límite de tokens**.
+4. **Validar** con pares de ejemplo propios.
+
+No hace falta reentrenar: cargarlo es `SentenceTransformer("nombre-del-modelo")`.
+
+</details>
+
+### 8.8 ¿Cómo evaluarías si un buscador con embeddings es mejor que uno con TF-IDF?
+
+<details>
+<summary>Ver respuesta</summary>
+
+1. **Armar un conjunto de evaluación propio:** consultas en lenguaje natural y, para cada una, los documentos relevantes. Los relevantes se definen **antes de ver los resultados**; si no, se ajusta la respuesta a lo que devolvió el modelo.
+2. **Variar el tipo de consulta,** e incluir **consultas sin solapamiento léxico** con sus relevantes (paráfrasis, sinónimos, incluso otro idioma). Ahí TF-IDF no puede ganar por construcción, y es donde se ve el aporte de la semántica.
+3. **Usar una métrica de ranking,** por ejemplo **precision@k**: la proporción de relevantes entre los k primeros resultados.
+4. **Comparar contra líneas de base:**
+   - **TF-IDF**, la línea de base léxica.
+   - **El azar**, el piso. Su precision@k esperada es `relevantes / N`. Si un género cubre la mitad del corpus, el azar ya da 0,5, y un 0,55 casi no significa nada.
+5. **Mirar el espacio, no solo el ranking:** la **distribución de similitudes entre pares al azar** muestra si el modelo discrimina o si todo se parece a todo.
+6. **Analizar por tipo de consulta y buscar casos de falla,** con una hipótesis de por qué fallaron. Que TF-IDF **empate o gane** en algunas consultas es normal (nombres propios, vocabulario literal): hay que explicarlo, no cambiar la métrica.
+7. **Discutir los límites de la métrica:**
+   - precision@k no mide el *recall* ni el orden dentro del top-k;
+   - depende de cuántos relevantes tiene cada consulta;
+   - con pocas consultas es ruidosa;
+   - los juicios de relevancia son subjetivos.
+
+**Ejemplo del TP2:** con 13 consultas, SBERT sacó 0,40 de precision@5, TF-IDF 0,385 y el azar 0,027. En promedio empataron, pero en las consultas sin palabras en común TF-IDF sacó 0 y SBERT 0,40.
+
+</details>
+
+### 8.9 PCA contra t-SNE para visualizar, y qué advertencias hay que hacer al interpretarlos
+
+<details>
+<summary>Ver respuesta</summary>
+
+| | **PCA** | **t-SNE** |
+|---|---|---|
+| Tipo | **Lineal**, determinista | **No lineal**, estocástico (depende de la semilla) |
+| Qué preserva | Las direcciones de **máxima varianza global** | Las **vecindades locales**: quién está cerca de quién |
+| Sirve para | La estructura global; dice cuánta varianza explica cada componente | Ver **grupos** |
+| Parámetros | La cantidad de componentes | La **`perplexity`** (cuántos vecinos considera) |
+
+Para matrices dispersas como TF-IDF se usa **`TruncatedSVD`**, que no centra los datos y no densifica la matriz (técnicamente es LSA, no PCA).
+
+**Advertencias con PCA:**
+
+- **Dos componentes explican muy poca varianza.** En las prácticas, un 2 % con TF-IDF y un 6 % con E5: se descarta más del 90 % de la información.
+- **Puntos mezclados en 2D no prueban que el espacio original no separe.** El clasificador usa todas las dimensiones.
+- **La varianza alta no siempre es lo que interesa.** En el TP, las dos componentes de TF-IDF solo separaban libros **duplicados**.
+
+**Advertencias con t-SNE:**
+
+- **Las distancias entre grupos y el tamaño de los grupos no significan nada:** solo vale la cercanía local.
+- **El resultado cambia** con la `perplexity` y con la semilla.
+- **Es lento** con muchos puntos: conviene usar una muestra.
+
+**Para los dos:** ninguno usa las etiquetas. El color (por ejemplo, por género) se agrega **después**, y es información que el modelo **nunca vio**. Si los colores forman grupos, el espacio captura algo de esa categoría; si no, puede deberse a la proyección y no al espacio.
+
+</details>
 
 ---
 

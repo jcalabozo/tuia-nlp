@@ -290,13 +290,175 @@ Acotar el ámbito permite capturar relaciones reales: «inteligencia» y «artif
 
 ## 7. Preguntas de desarrollo para practicar
 
-1. **Tres fuentes distintas** (PDF digital con tablas, PDF escaneado, fotos): qué herramienta usarías en cada caso y por qué. → capa de texto frente a imagen; pdfplumber o Docling; pdf2image + OCR; EasyOCR si importa la posición.
-2. **Stemming contra lematización**: funcionamiento, costo, calidad, cuándo conviene cada uno, con ejemplos.
-3. **Pipeline de preprocesamiento para análisis de sentimiento**: qué aplicás y qué evitás (stopwords con negaciones, emojis como señal, abreviaturas antes de corregir).
-4. **Por qué los conversores generan Markdown** y en qué se diferencian MarkItDown, Docling, MinerU y Marker.
-5. **Scraping de un sitio con login y contenido generado con JavaScript**: qué herramientas usás y qué cuidados éticos y técnicos tomás.
-6. **Estrategias de chunking** y cómo elegir `chunk_size` y `chunk_overlap` para un RAG.
-7. **Co-ocurrencia contra correlación de palabras**, con un ejemplo.
+> Intentá responder cada una antes de abrir la respuesta. Son respuestas modelo: cubren lo que se espera encontrar en un parcial.
+
+### 7.1 Tres fuentes distintas (PDF digital con tablas, PDF escaneado, fotos): qué herramienta usarías en cada caso y por qué
+
+<details>
+<summary>Ver respuesta</summary>
+
+La primera pregunta es siempre **si el archivo tiene capa de texto o es una imagen**.
+
+- **PDF digital con tablas:** tiene capa de texto, así que no hace falta OCR. Pero un PDF guarda **instrucciones de dibujo** («esta letra en esta coordenada»), no celdas ni párrafos, y `extract_text()` de pypdf o PyMuPDF devuelve la tabla como texto corrido. Por eso conviene **pdfplumber**, que reconstruye tablas a partir de las posiciones, o **Docling**, que es un parser estructurado local que respeta tablas y orden de lectura y exporta a Markdown o JSON.
+- **PDF escaneado:** cada página es una **imagen**, y no hay texto que extraer: un lector de PDF devuelve vacío, y cambiar la codificación no sirve. Hay que convertir las páginas a imágenes con **pdf2image** (que necesita poppler) y aplicar **OCR** con **pytesseract**. Preprocesar la imagen (binarizar, eliminar ruido) mejora el resultado. Si tiene fórmulas o un diseño complejo, **MinerU** o **Marker**.
+- **Fotos:** OCR directo con **pytesseract** (junto con Pillow). Si importa **dónde** está cada texto, por ejemplo en carteles o formularios, conviene **EasyOCR**, que devuelve las coordenadas de cada fragmento.
+
+En los tres casos, el OCR **nunca es 100 % preciso**: hay que validar la salida, y después limpiar y segmentar.
+
+</details>
+
+### 7.2 Stemming contra lematización: funcionamiento, costo, calidad, cuándo conviene cada uno, con ejemplos
+
+<details>
+<summary>Ver respuesta</summary>
+
+Las dos técnicas reducen las variantes de una palabra a una forma común, para que «corre», «corriendo» y «corrió» cuenten como lo mismo.
+
+- **Stemming:** recorta sufijos con **reglas heurísticas** (Porter, Snowball), sin diccionario ni contexto.
+  - Es **rápido y barato**.
+  - La raíz que deja **puede no ser una palabra**: «corriendo» y «corre» → «corr».
+  - **Aplana matices** y puede juntar palabras distintas que comparten raíz.
+  - En NLTK: `SnowballStemmer('spanish')`.
+- **Lematización:** lleva cada palabra a su **lema**, la forma de diccionario. Usa **diccionarios, análisis morfológico, la categoría gramatical y el contexto**.
+  - El resultado **siempre es una palabra válida**: «hojas» → «hoja», «buenísimo» → «bueno».
+  - Es **más lenta**, pero más precisa, y puede conservar información como el grado (comparativo, superlativo).
+  - En spaCy: el modelo `es_core_news_sm`.
+- **Cuándo conviene cada uno:**
+  - **Stemming**, cuando importan la velocidad y el *recall*: búsqueda y recuperación de información sobre grandes volúmenes.
+  - **Lematización**, cuando importan la precisión o la interpretabilidad: análisis de sentimiento, extracción de información, o resultados que va a leer una persona.
+
+</details>
+
+### 7.3 Pipeline de preprocesamiento para análisis de sentimiento: qué aplicás y qué evitás
+
+<details>
+<summary>Ver respuesta</summary>
+
+La idea central es que en sentimiento **muchas cosas que en otras tareas son ruido acá son señal**.
+
+**Qué aplico, en este orden:**
+
+1. **Extraer y parsear sin borrar las señales expresivas:** mayúsculas sostenidas («MALÍSIMO»), repeticiones («buenooo»), signos enfáticos («!!!») y emojis.
+2. **Emojis:** convertirlos a texto («😡» → «cara enojada») o tratarlos como tokens. Son **señal emocional**.
+3. **Expandir abreviaturas y jerga** con un diccionario («pq» → «porque», «x» → «por»). Va **antes** de corregir: si no, el corrector convierte la abreviatura en otra palabra.
+4. **Corrección ortográfica**, con pyspellchecker o autocorrect para español.
+5. **Minúsculas**, guardando antes como rasgo, si interesa, que el texto venía en mayúsculas sostenidas (un «grito»).
+6. **Stopwords con una lista personalizada**, que conserve **negaciones** («no», «nunca», «sin»), **intensificadores** («muy») y **moduladores** («apenas», «pero»).
+7. **Tokenizar y lematizar**, mejor que *stemming* porque conserva matices.
+8. **n-gramas (bigramas):** así «no bueno» es una unidad, y no la palabra «bueno» suelta.
+
+**Qué evito:**
+
+- Quitar stopwords con una lista genérica: «no me gustó» sin «no» invierte el sentido.
+- Borrar los emojis y la puntuación expresiva.
+- Corregir la ortografía antes de expandir las abreviaturas.
+- Un *stemming* agresivo, que aplane «buenísimo» y «bueno».
+
+</details>
+
+### 7.4 Por qué los conversores generan Markdown, y en qué se diferencian MarkItDown, Docling, MinerU y Marker
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Por qué Markdown:**
+
+- Un PDF **no guarda párrafos: guarda instrucciones de dibujo**. Al extraer el texto se pierden columnas, tablas, títulos y el orden de lectura.
+- Un pipeline de NLP, y sobre todo un LLM o un RAG, necesita esa **estructura**: para segmentar por secciones, para que cada fragmento conserve su título y para que las tablas sigan siendo tablas.
+- Markdown es **texto plano** (barato, legible por personas y por LLM) que **conserva la estructura** con una sintaxis mínima (`#` títulos, listas, tablas). Además, se puede segmentar respetando esa estructura (`MarkdownTextSplitter`). Por eso es el formato intermedio típico de la ingestión.
+
+**Diferencias:**
+
+| Herramienta | Qué es | Cuándo usarla | Costo |
+|---|---|---|---|
+| **MarkItDown** (Microsoft) | Wrapper liviano, muchos formatos | Prototipos y scripts; para empezar | Instalación chica; para un OCR decente pide un LLM o Azure |
+| **Docling** | Parser estructurado local | Tablas y orden de lectura sin nube; exporta a Markdown o JSON | Más pesado (descarga modelos), pero corre en CPU |
+| **MinerU** | Documentos complejos | Escaneos, fórmulas a LaTeX, tablas a HTML; papers | Pesado; el modo VLM pide GPU |
+| **Marker** | Máxima calidad en PDF difíciles | Multicolumna, fórmulas, escaneos | Casi necesita GPU; licencia de los pesos restrictiva |
+
+**Criterio:** MarkItDown para entrar, Docling para estructura local, MinerU para papers y escaneos, Marker cuando la calidad importa y hay GPU. Y en todos los casos, **convertir a Markdown no reemplaza la limpieza ni la segmentación**.
+
+</details>
+
+### 7.5 Scraping de un sitio con login y contenido generado con JavaScript: qué herramientas usás y qué cuidados éticos y técnicos tomás
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Herramientas:**
+
+- **`requests` + BeautifulSoup no alcanzan.** `requests` solo baja el HTML inicial, BeautifulSoup solo parsea, y ninguno de los dos **ejecuta JavaScript**. Si el contenido se genera en el navegador, en ese HTML no está.
+- **Playwright o Selenium** automatizan un **navegador real** (puede correr sin ventana): completan el formulario de login, esperan a que se renderice el contenido y navegan las páginas.
+- **BeautifulSoup** para interpretar el HTML ya renderizado que devuelve el navegador. Es la combinación de la práctica de Lectulandia: Playwright navega y BeautifulSoup interpreta.
+- **Si el login es un POST simple sin JavaScript**, alcanza con `requests.Session`, que conserva las cookies de sesión entre pedidos. Si hay tokens **CSRF** o el login depende de JavaScript, Playwright.
+
+**Cuidados técnicos:**
+
+- Esperar a que aparezcan los elementos antes de leerlos, y usar selectores robustos.
+- **Pausas entre pedidos**, para no saturar el servidor.
+- Manejar los errores sin cortar la ejecución, y guardar de forma **incremental** para poder reanudar.
+- Eliminar duplicados y representar siempre igual los campos ausentes.
+- No hacer login en cada pedido: reutilizar la sesión.
+
+**Cuidados éticos y legales:**
+
+- Respetar los **términos de servicio** y el **`robots.txt`**. Es una zona legalmente gris en algunas jurisdicciones.
+- **Credenciales fuera del código**, por ejemplo en variables de entorno.
+- No extraer datos personales ni contenido protegido: en Lectulandia, solo metadatos y sinopsis públicas, nunca los libros.
+- Limitar la tasa de pedidos: los sitios pueden bloquear a los scrapers agresivos.
+
+</details>
+
+### 7.6 Estrategias de chunking, y cómo elegir `chunk_size` y `chunk_overlap` para un RAG
+
+<details>
+<summary>Ver respuesta</summary>
+
+**Por qué segmentar:** los modelos de embeddings tienen un **límite de tokens** (lo que lo supera se trunca sin aviso), y un RAG arma el contexto del LLM con **fragmentos** recuperados. Un chunk enfocado en una idea se recupera con más precisión que un documento entero.
+
+**Estrategias:**
+
+| Estrategia | Cómo funciona | Cuándo conviene |
+|---|---|---|
+| **Tamaño fijo** | N caracteres o tokens, con solapamiento | La más simple y barata; un buen punto de partida |
+| **Por oraciones** | Respeta los límites de oración (spaCy, NLTK, pySBD) | No cortar ideas a la mitad |
+| **Recursiva** | Prueba separadores jerárquicos `["\n\n", "\n", " ", ""]` hasta llegar al tamaño | Texto general; respeta párrafos cuando puede |
+| **Especializada** | Sigue la estructura de Markdown o LaTeX | Documentación y papers ya convertidos |
+| **Semántica** | Agrupa oraciones por similitud de embeddings y corta donde cambia el tema | Cuando el tema cambia sin marcas de formato |
+
+**Cómo elegir `chunk_size`:**
+
+1. **Preprocesar** antes: sacar el HTML y el ruido.
+2. **No superar el límite de tokens** del modelo de embeddings.
+3. Considerar el contenido: textos cortos (mensajes) contra largos (manuales).
+4. Saber qué se gana y qué se pierde:
+   - **Chunks chicos** (128–256 tokens): información granular y recuperación precisa, pero cada fragmento tiene poco contexto.
+   - **Chunks grandes** (512–1024): más contexto, pero el embedding mezcla varios temas y le llega más ruido al LLM.
+5. **Probar un rango y evaluarlo** con consultas reales.
+
+**`chunk_overlap`:** cuánto del final de un chunk se repite al principio del siguiente, para no cortar una idea justo en el borde. Si es muy chico, quedan fragmentos sin sentido; si es muy grande, se repite información y crecen la cantidad de chunks y el costo. Un valor orientativo es una fracción chica del `chunk_size`.
+
+**Dos aclaraciones:** `chunk_size` es un **máximo**, no un tamaño exacto, y el solapamiento **no siempre es exacto**, porque depende de dónde encuentre el splitter un separador.
+
+</details>
+
+### 7.7 Co-ocurrencia contra correlación de palabras, con un ejemplo
+
+<details>
+<summary>Ver respuesta</summary>
+
+- **Co-ocurrencia:** cuenta cuántas veces dos palabras aparecen **juntas en un ámbito acotado**. Ese ámbito puede ser una **ventana** (por ejemplo, ±5 palabras) o una **unidad estructural** (la misma oración, el mismo párrafo, el mismo tweet). Se arma con una matriz de co-ocurrencia, por ejemplo a partir de `CountVectorizer`.
+- **Correlación:** mide si la **presencia** de una palabra se **asocia estadísticamente** a la de la otra **a lo largo de todos los documentos**, considerando también cuándo **no** aparecen. Se calcula con Pearson (`pandas.corr()`) sobre los vectores de presencia por documento, o con información mutua.
+- **La diferencia:** la co-ocurrencia es un **prerrequisito** de la correlación, pero dos palabras pueden co-ocurrir **por azar** o porque una de ellas aparece en todos lados. La correlación descarta eso, porque mira el patrón completo de presencia y ausencia.
+
+**Ejemplo, en un corpus de noticias:**
+
+- **«tasas» e «interés»** co-ocurren mucho y además **correlacionan alto**: cuando aparece una, casi siempre aparece la otra, y cuando falta una, suele faltar la otra.
+- **«el» y «gobierno»** co-ocurren muchísimo, porque «el» está en casi todas las oraciones, pero **la correlación es baja**: que aparezca «el» no dice nada sobre si aparece «gobierno».
+
+**Ojo con los términos:** una correlación **negativa** significa que las palabras **tienden a excluirse**; una correlación **nula** significa que **no hay relación lineal**. El apunte los confunde (ver la fe de erratas del §3).
+
+</details>
 
 ---
 
