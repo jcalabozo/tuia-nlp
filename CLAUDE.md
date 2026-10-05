@@ -33,4 +33,4 @@ tuia-nlp/                 ← este repo (jcalabozo/tuia-nlp, público, personal)
 
 - Mensajes en español y en tercera persona: "Agrega …", "Corrige …", "Reorganiza …".
 - **Identidad:** los commits van con la identidad personal del usuario (la que figura en el historial de los dos repos), configurada con `git config user.name` y `git config user.email` **en cada repo**: este y `PLN_TUIA`. La config global de la máquina puede ser otra. En una máquina nueva, verificarla con `git config user.email` antes del primer commit.
-- En este repo, ante la duda, preguntar antes de pushear.
+- **No commitear ni pushear sin orden explícita** del usuario, en ningún repo: quiere revisar y comparar los cambios antes. Al terminar, listar los archivos modificados y esperar.
