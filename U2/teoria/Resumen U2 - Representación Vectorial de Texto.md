@@ -1,7 +1,7 @@
 # Resumen · Unidad 2: Representación Vectorial de Texto
 
 > **Fuentes:** apunte de la cátedra (Notion), prácticas «Vectorización frecuentista» y «Embeddings semánticos», y enunciado del TP2.
-> **Cómo usarlo:** el hilo conductor es **qué limitación resolvió cada método respecto del anterior**. Si podés contar esa historia de memoria (§0), tenés la unidad. Antes del parcial, recorré las **trampas** (§7) y las **preguntas de desarrollo** (§8).
+> **Cómo usarlo:** el hilo conductor es **qué limitación resolvió cada método respecto del anterior**. Si podés contar esa historia de memoria (§0), tenés la unidad. Antes del parcial, recorré las **trampas** (§7), las **preguntas de desarrollo** (§8) y los **casos prácticos** (§9).
 
 ---
 
@@ -569,7 +569,172 @@ Para matrices dispersas como TF-IDF se usa **`TruncatedSVD`**, que no centra los
 
 ---
 
-## 9. Glosario
+## 9. Casos prácticos: ¿cómo lo resolverías?
+
+> Cada caso plantea un problema concreto. Pensá la solución completa (qué representación, por qué y cómo comprobar que funciona) antes de abrir la respuesta.
+
+### 9.1 Las preguntas frecuentes de un banco
+
+El buscador de preguntas frecuentes de un banco usa TF-IDF. Un usuario escribe «cómo saco plata del cajero» y no aparece la respuesta que corresponde, que se titula «Extracción de efectivo en terminales ATM». ¿Por qué falla y qué proponés?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** la consulta y la respuesta **no comparten ninguna palabra** («saco» y «extracción», «plata» y «efectivo», «cajero» y «ATM»), así que la similitud TF-IDF es **0**. TF-IDF mide coincidencia léxica, no significado.
+
+**Solución:**
+
+1. **Usar embeddings de oración** con un modelo **multilingüe o entrenado en español**, elegido con **MTEB** mirando las tareas de *retrieval*: por ejemplo, `multilingual-e5-small` o un modelo de `sentence-transformers` como el `distiluse` del apunte.
+2. **Vectorizar las preguntas frecuentes una sola vez** y guardar los embeddings normalizados. Con E5, el prefijo `passage:` va en los documentos y `query:` en las consultas.
+3. **Buscar por similitud coseno** entre la consulta y las preguntas frecuentes.
+4. **Combinarlo con TF-IDF:** los usuarios también buscan por términos exactos («CBU», «tarjeta Visa»), donde TF-IDF es muy bueno. Una búsqueda híbrida aprovecha los dos.
+
+**Cómo validarlo:**
+
+- Armar un conjunto de consultas reales, con varias **paráfrasis** sin palabras en común con la respuesta, y definir la respuesta correcta de cada una antes de probar.
+- Medir **precision@k** del modelo nuevo **contra TF-IDF y contra el azar**.
+
+**Qué evitar:** limpiar las consultas como para TF-IDF (sin stopwords, sin puntuación) antes de pasarlas al modelo de oración, que usa el texto natural.
+
+</details>
+
+### 9.2 Clasificar reseñas que no paran de llegar
+
+Una tienda recibe miles de reseñas por día y quiere clasificarlas en positivas y negativas con poco cómputo. Además, aparecen todo el tiempo palabras nuevas (productos, marcas, jerga). ¿Qué representación usás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** se necesita algo **barato**, que capture expresiones como «no me gustó», y que no haya que reentrenar cada vez que aparece una palabra nueva.
+
+**Solución:**
+
+1. **Línea de base:** **TF-IDF** con `ngram_range=(1, 2)` y una **regresión logística**. Los **bigramas** capturan las negaciones («no bueno», «nunca más»), y `sublinear_tf=True` evita que una palabra repetida domine.
+2. **Stopwords con una lista personalizada,** que **no** saque «no», «nunca», «muy» ni «pero»: en sentimiento cambian el sentido.
+3. **Para el flujo continuo, `HashingVectorizer`:** **no necesita `fit` ni guardar un vocabulario**, así que una palabra nueva cae en un índice fijo y el mismo vectorizador sirve para siempre. Con `n_features` grande (por ejemplo, 2<sup>20</sup>), las colisiones son raras. El costo es que no se puede volver de una columna a su palabra, y eso dificulta interpretar el modelo.
+4. **Si hace falta más calidad,** probar embeddings de oración y comparar.
+
+**Cómo validarlo:** validación cruzada con una métrica que considere las dos clases (por ejemplo, F1), y revisar en la matriz de confusión qué tipo de reseña se confunde, por ejemplo las irónicas.
+
+**Qué evitar:** un `CountVectorizer` con vocabulario fijo que haya que reentrenar todos los días, o sacar las negaciones como si fueran stopwords.
+
+</details>
+
+### 9.3 Un Word2Vec propio que no aprende nada
+
+Entrenaste Word2Vec con 300 noticias de economía para encontrar términos relacionados, pero los vecinos de «inflación» son palabras sin relación, como nombres de periodistas y de ciudades. ¿Qué pasó y qué hacés?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** el corpus es **demasiado chico**. Word2Vec aprende de la co-ocurrencia: con pocas noticias, cada palabra aparece en pocos contextos, y dos palabras "se parecen" solo porque salieron **en la misma nota**. Es lo mismo que pasó en el TP2 con 200 sinopsis: los vecinos de «guerra» eran palabras de un solo libro.
+
+**Solución:**
+
+1. **Usar vectores pre-entrenados** con un corpus grande en español, como **SBW** (Spanish Billion Words) cargado con `KeyedVectors`, que ya aprendieron el significado general de «inflación».
+2. **Si las palabras del dominio no están en el vocabulario,** usar **FastText**, que arma vectores para palabras nuevas a partir de sus n-gramas de caracteres.
+3. **Si igual hay que entrenar un modelo propio,** hacerlo con **mucho más texto** del dominio (miles de noticias), con skip-gram (`sg=1`), `min_count` bajo y más épocas.
+
+**Cómo validarlo:** revisar los vecinos más cercanos de varias palabras del dominio y probar algunas analogías, comparando el modelo propio con el pre-entrenado.
+
+**Qué evitar:** interpretar las similitudes altas como calidad: en un corpus chico, que dos palabras tengan coseno 0,8 puede significar solo que salieron en la misma noticia.
+
+</details>
+
+### 9.4 Contratos largos y cláusulas que no aparecen
+
+Armaste un buscador semántico de contratos con SBERT. Cada contrato tiene unas 5.000 palabras, y las búsquedas sobre cláusulas que están al final («penalidades por rescisión») nunca encuentran el contrato correcto. ¿Qué pasa?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** **truncado silencioso.** Los modelos de oración tienen un **límite de tokens** (`max_seq_length`): `distiluse` procesa 128 tokens y E5, 512. Todo lo que pasa de ese límite **se descarta sin aviso**, así que el embedding de cada contrato representa solo el comienzo. Las cláusulas del final, para el modelo, no existen.
+
+**Solución:**
+
+1. **Confirmar el problema:** tokenizar cada contrato con el tokenizador del modelo y contar cuántos superan el límite. Seguramente, todos.
+2. **Segmentar** (*chunking*) cada contrato en fragmentos que entren en el límite, mejor si respetan la estructura (una cláusula por fragmento), con un poco de solapamiento.
+3. **Guardar varios vectores por contrato,** uno por fragmento, con el contrato y la cláusula como metadatos.
+4. **Al buscar,** comparar la consulta con todos los fragmentos y devolver el contrato al que pertenece el fragmento más parecido. Además, se puede mostrar la cláusula exacta.
+
+**Cómo validarlo:** consultas sobre cláusulas de distintas partes de los contratos (el principio, el medio y el final), comparando la precisión antes y después de segmentar.
+
+**Qué evitar:** asumir que el modelo "lee" todo el documento, o promediar los vectores de todos los fragmentos en uno solo, porque así se diluye justamente la cláusula buscada.
+
+</details>
+
+### 9.5 Preguntas duplicadas en un foro enorme
+
+Un foro tiene un millón de preguntas y quiere avisar, cuando alguien escribe una nueva, si ya hay una igual. Un compañero propone un **cross-encoder** porque es el más preciso. ¿Qué le contestás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** un cross-encoder recibe **cada par** de textos y devuelve un puntaje. Es muy preciso, pero para cada pregunta nueva habría que procesar **un millón de pares**, y para buscar duplicados en todo el foro, una cantidad de pares que crece de forma cuadrática. Es inviable en tiempo real.
+
+**Solución, en dos etapas:**
+
+1. **Recuperar candidatos con Sentence-BERT** (un *bi-encoder*): cada pregunta del foro se codifica **una sola vez** y se guarda su vector. Para una pregunta nueva, se codifica solo esa y se compara por coseno contra todas. Con muchos vectores se usa un índice de búsqueda aproximada, como el HNSW del TP2. Es el salto que muestra el paper de SBERT: de unas 65 horas a unos 5 segundos para encontrar el par más parecido entre 10.000 oraciones.
+2. **Reordenar los candidatos con el cross-encoder:** tomar los 10 o 20 más parecidos y pasarle solo esos pares. Así se aprovecha su precisión sin pagar su costo (lo que MTEB llama *reranking*).
+
+**Cómo validarlo:** pares de preguntas marcadas como duplicadas o no, midiendo la precisión de las alertas y cuántos duplicados reales se detectan, con y sin la etapa de reordenamiento.
+
+**Qué evitar:** elegir solo por precisión sin mirar el costo, o usar umbrales absolutos de similitud sin calibrarlos para el modelo, porque cada modelo tiene su propia escala.
+
+</details>
+
+### 9.6 «El gráfico dice que los embeddings no sirven»
+
+Proyectaste con PCA los embeddings de 10.000 noticias coloreadas por sección (política, deportes, economía…) y los puntos aparecen todos mezclados. Tu jefe concluye que los embeddings «no separan los temas» y que hay que descartarlos. ¿Qué le respondés?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** el gráfico **no permite esa conclusión**. PCA proyecta cientos de dimensiones sobre 2, y esas 2 suelen explicar **muy poca varianza**: en las prácticas, un 6 % con E5 y un 2 % con TF-IDF. Más del 90 % de la información no se ve, y una nube mezclada en 2D puede estar bien separada en el espacio original.
+
+**Solución:**
+
+1. **Informar la varianza explicada** por las dos componentes, para mostrar cuánto se pierde.
+2. **Medir en el espacio completo:**
+   - entrenar un **clasificador** de sección sobre los embeddings y medir su accuracy con validación cruzada, contra el azar;
+   - o hacer **clustering** y compararlo con las secciones con ARI.
+3. **Si se quiere visualizar grupos,** usar **t-SNE** sobre una muestra, advirtiendo que las distancias entre grupos y sus tamaños **no se interpretan**.
+4. **Revisar si el espacio está concentrado:** si todos los vectores comparten una componente común, **centrarlos** (restar la media) puede hacer visibles las diferencias, como pasó con los centroides por género en la práctica.
+
+**Cómo validarlo:** si el clasificador sobre los embeddings supera claramente al azar y a TF-IDF, los temas están separados, aunque el gráfico no lo muestre.
+
+**Qué evitar:** sacar conclusiones de una proyección 2D sin informar la varianza explicada, o interpretar las distancias de t-SNE como distancias reales.
+
+</details>
+
+### 9.7 «Precision@5 de 0,55: ¡el buscador nuevo es buenísimo!»
+
+Un equipo presenta un buscador con embeddings y celebra una precision@5 de 0,55. Las consultas de prueba son todas sobre novelas románticas, y la mitad del catálogo son novelas románticas. ¿Qué observás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** falta la **línea de base**. Si la mitad del catálogo es relevante para esas consultas, **elegir al azar** ya da una precision@5 esperada de alrededor de **0,5**: el 0,55 casi no supera el azar. Además, no se comparó con TF-IDF, y todas las consultas son del mismo tipo.
+
+**Solución:**
+
+1. **Calcular el piso de azar** de cada consulta: relevantes / total de documentos. Y **comparar contra TF-IDF**, la línea de base léxica.
+2. **Rediseñar las consultas:**
+   - con **pocos relevantes** cada una, para que el piso sea bajo y la métrica discrimine;
+   - de **tipos variados** (temas, tramas, géneros distintos);
+   - con algunas **sin palabras en común** con sus relevantes, que es donde los embeddings deberían ganar.
+3. **Definir los relevantes antes de ver los resultados.**
+4. **Reportar con honestidad:** separar por tipo de consulta, mostrar casos de falla y aclarar qué no mide precision@k (el *recall*, el orden dentro del top-k), y que con pocas consultas la métrica es ruidosa.
+
+**Cómo validarlo:** con el conjunto rediseñado, el buscador tiene que superar claramente tanto al azar como a TF-IDF. En el TP2, por ejemplo, el azar daba 0,027 y TF-IDF 0,385, así que un 0,40 de los embeddings era un empate con TF-IDF, no una mejora.
+
+**Qué evitar:** presentar una métrica sin su piso, o cambiar la métrica o las consultas después de ver los resultados hasta que den lo esperado.
+
+</details>
+
+---
+
+## 10. Glosario
 
 - **Bolsa de palabras (BoW):** representación que cuenta palabras e ignora el orden.
 - **Colisión de hash:** dos entradas distintas que dan el mismo valor hash (el mismo índice).

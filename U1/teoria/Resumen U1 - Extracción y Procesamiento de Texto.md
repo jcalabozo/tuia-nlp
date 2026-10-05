@@ -1,7 +1,7 @@
 # Resumen · Unidad 1: Extracción y Procesamiento de Texto
 
 > **Fuentes:** apunte de la cátedra (Notion), consigna de la práctica de scraping (Lectulandia) y enunciado del TP2.
-> **Cómo usarlo:** leé primero el mapa (§0) y las ideas fuerza de cada sección. Las tablas son para repasar rápido. Antes del parcial, recorré las **trampas** (§6) y las **preguntas de desarrollo** (§7).
+> **Cómo usarlo:** leé primero el mapa (§0) y las ideas fuerza de cada sección. Las tablas son para repasar rápido. Antes del parcial, recorré las **trampas** (§6), las **preguntas de desarrollo** (§7) y los **casos prácticos** (§8).
 
 ---
 
@@ -462,7 +462,153 @@ La idea central es que en sentimiento **muchas cosas que en otras tareas son rui
 
 ---
 
-## 8. Glosario
+## 8. Casos prácticos: ¿cómo lo resolverías?
+
+> Cada caso plantea un problema concreto. Pensá la solución completa (qué herramienta, en qué orden, qué cuidar) antes de abrir la respuesta.
+
+### 8.1 Pólizas en PDF para un asistente con RAG
+
+Una aseguradora tiene 10.000 pólizas en PDF y quiere un asistente que responda preguntas sobre las coberturas. La mitad son PDF generados por computadora; la otra mitad, escaneos de papel. Casi todas tienen **tablas** de coberturas y montos. ¿Cómo armás la ingestión de los documentos?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** hay dos tipos de documento que necesitan herramientas distintas, y las tablas son la información más valiosa: si se rompen, el asistente responde mal sobre montos y coberturas.
+
+**Solución:**
+
+1. **Clasificar cada PDF:** intentar extraer texto con pypdf. Si sale vacío o casi vacío, es un escaneo.
+2. **PDF digitales:** usar un parser que **conserve la estructura**, como **Docling** o **pdfplumber**, y no `extract_text()`, que convierte las tablas en texto corrido. Exportar a **Markdown**, con títulos y tablas.
+3. **PDF escaneados:** pasar las páginas a imágenes con **pdf2image** y aplicar OCR (**pytesseract**), preprocesando la imagen (binarizar, eliminar ruido). Con tablas complejas o muchos documentos, **Docling** o **MinerU** hacen OCR y además reconstruyen la tabla.
+4. **Limpiar:** eliminar encabezados y pies de página repetidos, números de página y saltos de línea cortados.
+5. **Segmentar respetando la estructura:** chunking por secciones de Markdown (`MarkdownTextSplitter` o recursivo), **sin partir una tabla** a la mitad y guardando como metadatos el número de póliza, la sección y la página. El `chunk_size` no puede superar el límite de tokens del modelo de embeddings.
+
+**Cómo validarlo:** revisar a mano una muestra de escaneos (el OCR nunca es 100 % preciso), comparando montos contra el original, y probar el asistente con preguntas reales sobre coberturas.
+
+**Qué evitar:** procesar todo con un solo lector de PDF, perder las tablas o creer que convertir a Markdown ya alcanza sin limpiar ni segmentar.
+
+</details>
+
+### 8.2 Caracteres raros en un CSV
+
+Exportás los clientes de un sistema viejo a CSV y, al leerlo con pandas, aparece `UnicodeDecodeError`. Un compañero lo "arregla" abriéndolo con otra codificación, pero ahora los nombres dicen «PolÃ­tica» y «MarÃ­a». ¿Qué está pasando y cómo lo resolvés?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** es un problema de **codificación**: el texto se escribió con una codificación y se está leyendo con otra.
+
+- **El `UnicodeDecodeError`** aparece al leer como UTF-8 bytes que no son UTF-8 válido: el archivo probablemente está en **ISO-8859-1 (Latin-1)** o en Windows-1252.
+- **«PolÃ­tica»** es el síntoma inverso, llamado *mojibake*: bytes UTF-8 leídos como Latin-1. La «í» en UTF-8 son dos bytes (`C3 AD`); leídos como Latin-1, cada byte se vuelve un carácter: «Ã» y un guion invisible.
+
+**Solución:**
+
+1. **Averiguar la codificación real** del archivo: preguntar en el sistema de origen o probar las candidatas y mirar las palabras con tildes y ñ.
+2. **Leer con la codificación correcta:** `pd.read_csv(ruta, encoding="latin-1")` si es Latin-1, o UTF-8 si es UTF-8.
+3. **Si el texto ya quedó mal leído,** se puede deshacer: volver a los bytes con la codificación equivocada y decodificarlos con la correcta, `texto.encode("latin-1").decode("utf-8")`. El patrón del error indica qué pasó: «Ã» suele delatar UTF-8 leído como Latin-1, y «√» UTF-8 leído como Mac Roman (lo que apareció en el dataset de Lectulandia).
+4. **Guardar el resultado en UTF-8** y documentarlo.
+
+**Cómo validarlo:** buscar en todo el archivo los patrones típicos («Ã», «√», «�») y contar cuántos quedan. Antes, en el dataset de Lectulandia, el mojibake creaba géneros duplicados como «Histórico» e «Hist√≥rico».
+
+**Qué evitar:** probar codificaciones hasta que "no dé error". Latin-1 **nunca** da error, porque cualquier byte es un carácter válido, así que leer todo como Latin-1 esconde el problema en vez de resolverlo.
+
+</details>
+
+### 8.3 Un buscador para 200 horas de clases grabadas
+
+Una facultad tiene 200 horas de clases en video y quiere que los alumnos busquen un tema («regresión logística») y lleguen al minuto exacto en que se explica. ¿Cómo lo armás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** el contenido está en el **audio**, así que primero hay que convertirlo en texto, y conservar **en qué minuto** se dijo cada cosa.
+
+**Solución:**
+
+1. **Extraer el audio** de cada video con **ffmpeg**. Si los videos están en YouTube y tienen subtítulos, **youtube-transcript-api** da la transcripción directamente.
+2. **Transcribir con Whisper,** que es multilingüe, robusto al ruido y devuelve el texto en segmentos con **marcas de tiempo**.
+3. **Limpiar la transcripción:** muletillas, repeticiones y errores en los términos técnicos. Un diccionario de términos de la materia ayuda a corregirlos.
+4. **Segmentar por tiempo o por oraciones,** por ejemplo en fragmentos de 1 o 2 minutos con solapamiento, guardando como metadatos el video y el minuto de inicio de cada fragmento.
+5. **Indexar los fragmentos** para buscar. Para encontrar el tema aunque el profesor lo diga con otras palabras, conviene una búsqueda por significado (Unidad 2). Cada resultado lleva al video en el minuto guardado.
+
+**Cómo validarlo:** revisar una muestra de transcripciones (el reconocimiento del habla también se equivoca, sobre todo con nombres propios y términos técnicos) y probar búsquedas de temas que se sepa dónde están.
+
+**Qué evitar:** transcribir sin guardar las marcas de tiempo, o indexar cada clase entera como un solo documento: el alumno llegaría a la clase, pero no al minuto.
+
+</details>
+
+### 8.4 Recetas de un sitio con scroll infinito
+
+Querés armar un dataset con 2.000 recetas de un sitio. La página carga las recetas con JavaScript a medida que bajás (scroll infinito), y el `robots.txt` prohíbe acceder a `/api/`. ¿Cómo lo resolvés?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** con `requests` solo se obtiene el HTML inicial, sin las recetas, porque las genera JavaScript. Y el atajo técnico de llamar directo a `/api/` está **prohibido** por el sitio.
+
+**Solución:**
+
+1. **Revisar primero los términos de servicio y si existe una API oficial o un dataset público.** Si existe, usarla.
+2. **Automatizar un navegador con Playwright** (o Selenium): abrir la página, **hacer scroll** y esperar a que carguen las tarjetas nuevas, hasta juntar los enlaces necesarios.
+3. **Visitar cada receta con pausas** entre pedidos (por ejemplo, 1 o 2 segundos) y pasar el HTML renderizado a **BeautifulSoup** para extraer los campos: título, ingredientes y pasos.
+4. **Ser robusto:** manejar errores sin cortar la ejecución, guardar de forma **incremental** para poder reanudar, eliminar duplicados por URL y representar siempre igual los campos faltantes.
+5. **Respetar el `robots.txt`:** no tocar `/api/`, aunque sea técnicamente posible.
+
+**Cómo validarlo:** comparar a mano algunas recetas extraídas con la página, y contar duplicados y campos vacíos.
+
+**Qué evitar:** saturar el sitio con pedidos sin pausa, ignorar el `robots.txt` o descargar contenido que no se puede redistribuir.
+
+</details>
+
+### 8.5 Un buscador de productos que no encuentra nada
+
+En un supermercado online, los usuarios buscan «cafe», «CAFÉ» o «cafés», y el buscador, que compara palabras exactas, solo encuentra los productos escritos igual que la búsqueda. ¿Qué preprocesamiento aplicás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** las variantes de una misma palabra (mayúsculas, tildes, plural) se tratan como palabras distintas. En búsqueda importa sobre todo el *recall*: no perder productos relevantes.
+
+**Solución:** aplicar **la misma normalización a la consulta y a los productos**.
+
+1. **Minúsculas** con `casefold()`, más robusto que `lower()` para comparar.
+2. **Quitar tildes** con `unicodedata.normalize("NFKD", ...)` y descartar los caracteres combinantes: así «café» = «cafe». En nombres de productos, perder la diferencia entre «si» y «sí» no importa.
+3. **Stemming** (por ejemplo, `SnowballStemmer('spanish')`): «cafés» y «café» quedan con la misma raíz. Para búsqueda conviene más que la lematización, porque es rápido y prioriza el *recall*.
+4. **Corrección ortográfica opcional,** para errores frecuentes como «cafe con lece».
+5. **Stopwords:** sacar las palabras vacías de la consulta («de», «la», «para»).
+
+**Cómo validarlo:** armar una lista de búsquedas reales con sus productos esperados y medir cuántos encuentra antes y después.
+
+**Qué evitar:** normalizar solo los productos y no la consulta (o al revés), o un stemming tan agresivo que junte productos distintos con la misma raíz.
+
+</details>
+
+### 8.6 ¿Qué problemas aparecen juntos en los reclamos?
+
+Una empresa de internet tiene 30.000 reclamos de clientes en texto libre y quiere saber qué problemas aparecen juntos, por ejemplo si «corte» suele venir con «lluvia» o con «módem». ¿Cómo lo analizás?
+
+<details>
+<summary>Ver resolución</summary>
+
+**Diagnóstico:** es un problema de **co-ocurrencia y correlación** de términos.
+
+**Solución:**
+
+1. **Preprocesar:** minúsculas, stopwords, y lematización o stemming para que «cortes» y «corte» cuenten igual. Expandir abreviaturas frecuentes.
+2. **Definir el ámbito:** cada **reclamo** es la unidad estructural; también se puede usar una ventana de palabras.
+3. **Contar la co-ocurrencia:** una matriz de presencia de términos por reclamo, con `CountVectorizer(binary=True)`, y a partir de ella cuántas veces aparece cada par.
+4. **Pasar a la correlación:** que dos términos co-ocurran mucho puede deberse solo a que los dos son muy frecuentes. La **correlación** (Pearson sobre la presencia y ausencia en todos los reclamos, o información mutua) mide si de verdad aparecen asociados más de lo que se esperaría por azar.
+5. **Sumar n-gramas,** como «sin servicio» o «módem reinicia», que capturan problemas de más de una palabra.
+
+**Cómo validarlo:** leer algunos reclamos de los pares más asociados y confirmar que la relación tiene sentido.
+
+**Qué evitar:** concluir a partir de la co-ocurrencia sola: «internet» va a co-ocurrir con todo, porque está en casi todos los reclamos, y eso no indica ninguna relación entre problemas.
+
+</details>
+
+---
+
+## 9. Glosario
 
 - **Chunk:** fragmento de texto producido por la segmentación.
 - **Co-ocurrencia:** aparición conjunta de palabras en un ámbito acotado (una ventana o una unidad estructural).
