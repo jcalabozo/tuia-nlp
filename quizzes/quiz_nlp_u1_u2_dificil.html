@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz</title>
+<!--
+  ╔════════════════════════════════════════════════════════════════════════╗
+  ║  PLANTILLA DE QUIZ · motor v2                                           ║
+  ║                                                                        ║
+  ║  Para crear un quiz nuevo: copiar este archivo y reemplazar SOLO el     ║
+  ║  bloque "DATOS DEL QUIZ" (constantes QUIZ y QUESTIONS).                 ║
+  ║  Todo lo demás (conteos, temas, porcentajes) se calcula solo.           ║
+  ║                                                                        ║
+  ║  Formato de las preguntas y reglas de calidad: COMO_USAR.md            ║
+  ║  Validar antes de usar:  node validar_quiz.mjs <archivo.html>          ║
+  ╚════════════════════════════════════════════════════════════════════════╝
+-->
+<script>
+/* ═══════════════════════ INICIO DATOS DEL QUIZ ═══════════════════════ */
+
+const QUIZ = {
+  id: "nlp-u1-u2-dificil",
+  eyebrow: "TUIA · Procesamiento de Lenguaje Natural · Parcial",
+  titulo: "Quiz <em>nivel difícil</em>",
+  subtitulo: "Unidades 1 y 2 · El archivo de un diario",
+  descripcion: "Un <strong>diario con 40 años de historia</strong> quiere poner en línea su archivo: las notas de 1985–1999 se <strong>escanearon</strong> a PDF, las de 2000–2012 están en un <strong>sistema viejo</strong> que exporta CSV y las actuales se publican en un <strong>sitio web</strong> que carga los comentarios con JavaScript. El diario quiere extraer y limpiar todo, representarlo como vectores, recomendar notas relacionadas y buscar en el archivo con lenguaje natural. Hay <strong>cálculos</strong> (bytes, TF-IDF, coseno, n-gramas, sparsidad), preguntas donde hay que marcar <strong>todas</strong> las correctas y distractores que son verdad a medias. Las dos preguntas de <strong>desarrollo</strong> traen respuesta modelo y puntos clave."
+};
+
+const QUESTIONS = [
+  // ═══════════════ U1 · EXTRACCIÓN Y PARSEO ═══════════════
+  {
+    cat: "U1 · Extracción y parseo",
+    type: "text",
+    text: "El sistema viejo del diario guardaba los títulos en ISO-8859-1, y el nuevo los guarda en UTF-8. ¿Cuántos bytes ocupa el título «¿Qué pasó en 1986?» en <strong>UTF-8</strong>? (Respondé con un número.)",
+    answers: ["21", "21 bytes"],
+    explain: "El título tiene 18 caracteres. En UTF-8, los caracteres ASCII ocupan 1 byte y el resto, 2 o más: acá «¿» (C2 BF), «é» (C3 A9) y «ó» (C3 B3) ocupan 2 bytes cada uno. Total: 15 × 1 + 3 × 2 = <strong>21 bytes</strong>. En ISO-8859-1 ocupa <strong>18</strong>: usa 1 byte fijo por carácter y <em>sí</em> incluye «¿» y las vocales acentuadas (BF, E9, F3). Los errores típicos son creer que Latin-1 no tiene tildes o contar 3 bytes por cada carácter especial (24). → Resumen U1 §1.2"
+  },
+  {
+    cat: "U1 · Extracción y parseo",
+    type: "single",
+    text: "Un compañero lee el CSV de 2000–2012 con <code>encoding='latin-1'</code>, y aparecen títulos como «PolÃ­tica» y «EconomÃ­a». Dice que el problema está resuelto porque pandas ya no da error. ¿Qué está pasando?",
+    options: [
+      "Está en UTF-8 y se leyó como Latin-1: se arregla leyéndolo como UTF-8, o con <code>encode('latin-1').decode('utf-8')</code>",
+      "Está en Latin-1 y se leyó como UTF-8: se arregla aplicando <code>encode('utf-8').decode('latin-1')</code> a cada título",
+      "Es un problema de normalización Unicode: se arregla aplicando <code>unicodedata.normalize('NFKD')</code> a cada uno de los títulos",
+      "Está bien leído: si la codificación fuera incorrecta, pandas habría lanzado un <code>UnicodeDecodeError</code> al leer"
+    ],
+    answer: 0,
+    explain: "«Ã­» es el síntoma de bytes <strong>UTF-8 leídos como Latin-1</strong> (<em>mojibake</em>): la «í» en UTF-8 son dos bytes (C3 AD), y Latin-1 los muestra como dos caracteres, «Ã» y un guion invisible. Se arregla leyendo como UTF-8 o, si el texto ya quedó mal, volviendo a los bytes con la codificación equivocada y decodificando con la correcta. Que no dé error no prueba nada: <strong>Latin-1 nunca falla</strong>, porque cualquier byte es un carácter válido. La conversión inversa empeora el problema, y NFKD no tiene nada que ver con la codificación. → Resumen U1, caso 8.2"
+  },
+  {
+    cat: "U1 · Extracción y parseo",
+    type: "multi",
+    text: "Sobre la extracción de las notas escaneadas de 1985–1999 (a dos columnas, con fotos y epígrafes), ¿qué afirmaciones son correctas?",
+    options: [
+      "Si <code>extract_text()</code> devuelve cadenas vacías, lo más probable es que el PDF sea un escaneo sin capa de texto",
+      "MinerU o Marker reconstruyen mejor el orden de lectura a varias columnas, pero son pesados y suelen pedir GPU",
+      "Para lograr un OCR decente sobre escaneos, MarkItDown necesita apoyarse en un LLM o en un servicio como Azure",
+      "Una vez que Docling convierte las notas a Markdown con su estructura, ya no hace falta limpiarlas ni segmentarlas",
+      "Si <code>extract_text()</code> devuelve cadenas vacías, conviene volver a leer el PDF con otra codificación, como Latin-1"
+    ],
+    answer: [0, 1, 2],
+    explain: "Un PDF escaneado no tiene capa de texto: cada página es una imagen, y ni otro lector ni otra codificación lo resuelven. Hace falta <strong>OCR</strong>. Para diseños complejos (varias columnas, fórmulas), <strong>MinerU</strong> y <strong>Marker</strong> son los más fuertes, con el costo de ser pesados. <strong>MarkItDown</strong> es liviano, pero para un OCR de calidad pide un LLM o Azure. Y la trampa clásica: <strong>convertir a Markdown no reemplaza la limpieza ni la segmentación</strong> (encabezados repetidos, números de página, palabras cortadas, chunking). → Resumen U1 §1.3, §1.4 y trampas 3 y 5"
+  },
+  {
+    cat: "U1 · Extracción y parseo",
+    type: "single",
+    text: "Para sumar notas de una agencia de noticias, hay que entrar a su sitio con usuario y contraseña, y las notas se cargan con JavaScript después de abrir la página. ¿Qué afirmación es correcta?",
+    options: [
+      "Si el login es un POST simple, <code>requests.Session</code> alcanza para autenticarse, pero no trae lo que genera el JavaScript",
+      "<code>requests.Session</code> conserva las cookies del login, y con eso alcanza para obtener las notas generadas con JavaScript",
+      "Con Playwright ya no tiene sentido usar BeautifulSoup, porque el propio navegador entrega los datos ya estructurados",
+      "Scrapy lo resuelve sin navegador, porque es un framework de crawling que ejecuta el JavaScript de cada página"
+    ],
+    answer: 0,
+    explain: "Son dos problemas distintos. El <strong>login</strong>: si es un POST simple, <code>requests.Session</code> conserva la cookie de sesión entre pedidos (si hay tokens CSRF o el login usa JavaScript, hace falta un navegador). El <strong>contenido dinámico</strong>: ni <code>requests</code>, ni BeautifulSoup, ni Scrapy ejecutan JavaScript, así que las notas no están en el HTML que bajan. Hace falta <strong>Playwright</strong> o Selenium, y el HTML renderizado se sigue interpretando con <strong>BeautifulSoup</strong>, como en la práctica de Lectulandia. Además: términos de servicio, <code>robots.txt</code> y pausas entre pedidos. → Resumen U1 §1.5"
+  },
+  {
+    cat: "U1 · Extracción y parseo",
+    type: "single",
+    text: "Para detectar comentarios agresivos de los lectores, un compañero limpia cada comentario con esta línea. ¿Qué afirmación es correcta?",
+    code: "limpio = re.sub(r'[^\\w\\s]', '', texto.lower())",
+    options: [
+      "Borra señales que en esta tarea son información (mayúsculas sostenidas, «!!!», emojis); conviene guardarlas antes",
+      "Borra también las letras con tilde y la «ñ», porque en Python <code>\\w</code> solo reconoce los caracteres ASCII",
+      "No pierde nada relevante para la tarea: en cualquier análisis, los signos y las mayúsculas son solo ruido",
+      "Al pasar el texto a minúsculas antes de tokenizar, el tokenizador ya no puede detectar dónde termina cada palabra"
+    ],
+    answer: 0,
+    explain: "En una tarea emocional, lo que en otras tareas es ruido acá es <strong>señal</strong>: las mayúsculas sostenidas («BASTA»), los signos enfáticos y los emojis. Parsear es decidir qué es mensaje y qué es ruido <em>sin borrar las señales expresivas</em>: conviene guardarlas como rasgos (o convertir los emojis a texto) antes de limpiar. Ojo con el distractor de las tildes: en Python 3, <code>\\w</code> reconoce caracteres Unicode, así que «á» y «ñ» <strong>no</strong> se borran. → Resumen U1 §1.6 y §2.1"
+  },
+
+  // ═══════════════ U1 · PROCESAMIENTO ═══════════════
+  {
+    cat: "U1 · Procesamiento",
+    type: "single",
+    text: "La oración «el gobierno anunció nuevas medidas económicas hoy» tiene 7 palabras. ¿Cuántos bigramas y trigramas genera? ¿Y qué devuelve un modelo de trigramas si tiene que predecir la palabra que sigue a «económicas mañana», un par que nunca apareció en el corpus?",
+    options: [
+      "6 bigramas y 5 trigramas; no devuelve ninguna predicción, porque ese contexto de dos palabras nunca apareció",
+      "6 bigramas y 5 trigramas; usa las tres palabras anteriores como contexto y, por similitud, predice «hoy»",
+      "3 bigramas y 2 trigramas, porque los n-gramas no se solapan; no devuelve ninguna predicción para ese contexto",
+      "7 bigramas y 7 trigramas, uno por palabra; ante un contexto desconocido, devuelve la palabra más frecuente"
+    ],
+    answer: 0,
+    explain: "Los n-gramas se <strong>solapan</strong>: con k palabras hay k − 1 bigramas y k − 2 trigramas (6 y 5). Un modelo de trigramas predice con las <strong>n − 1 = 2</strong> palabras anteriores; si el par «económicas mañana» nunca apareció, no tiene nada que contar y no predice nada (como el «de la» → [] del apunte). Ese es su límite: no generaliza a secuencias que no vio. → Resumen U1 §3 y trampa 13"
+  },
+  {
+    cat: "U1 · Procesamiento",
+    type: "single",
+    text: "¿Cuál de estas afirmaciones sobre stemming y lematización es correcta?",
+    options: [
+      "La lematización puede dar lemas distintos para una misma forma («como»: verbo o conjunción), porque usa el contexto",
+      "El stemming consulta la categoría gramatical y el contexto de cada palabra para decidir qué sufijo recortar y qué raíz conservar",
+      "El stemming siempre devuelve una palabra del diccionario, aunque más corta y más general que el lema",
+      "En un buscador donde importa no perder resultados, conviene lematizar, porque es más precisa y más rápida"
+    ],
+    answer: 0,
+    explain: "La <strong>lematización</strong> usa diccionarios, análisis morfológico, la <strong>categoría gramatical</strong> y el <strong>contexto</strong>: «como» puede lematizarse como «comer» (verbo) o quedar «como» (conjunción). El <strong>stemming</strong> recorta sufijos con reglas, sin diccionario ni contexto, y su raíz puede no ser una palabra («corr»). Para un buscador que prioriza el <em>recall</em> y la velocidad suele convenir el stemming: la lematización es <strong>más lenta</strong>. → Resumen U1 §2.3"
+  },
+  {
+    cat: "U1 · Procesamiento",
+    type: "single",
+    text: "En el archivo, dos «Ñandú» que se ven idénticos no coinciden en una búsqueda exacta: un sistema guardó la «ñ» precompuesta, y otro, una «n» seguida de una tilde combinante. Para unificarlos se aplica <code>unicodedata.normalize('NFKD', ...)</code> y se descartan los caracteres combinantes. ¿Qué efecto secundario tiene ese paso en español?",
+    options: [
+      "También convierte la «ñ» en «n»: «año» y «ano» quedan iguales, y se pierden distinciones como «sí» y «si»",
+      "Ninguno: el paso solo actúa sobre las vocales con tilde, y deja intactas la «ñ», la «ü» y el resto de las consonantes",
+      "Pasa todo el texto a minúsculas, igual que <code>casefold()</code>, así que se pierden los nombres propios",
+      "Ninguno, y además no resuelve el problema: NFKD no actúa sobre caracteres que ya están descompuestos"
+    ],
+    answer: 0,
+    explain: "NFKD <strong>descompone</strong> cada carácter en su letra base y sus marcas combinantes. Al descartar las marcas, los dos «Ñandú» quedan como «Nandu» y ahora sí coinciden. Pero la «ñ» también se descompone en «n» + tilde combinante, así que <strong>«año» pasa a ser «ano»</strong>, y se pierden «sí»/«si» y «él»/«el». NFKD no cambia mayúsculas: eso lo hacen <code>lower()</code> o <code>casefold()</code>. Para búsquedas puede convenir igual, pero hay que saber qué se pierde. → Resumen U1 §2.1"
+  },
+  {
+    cat: "U1 · Procesamiento",
+    type: "single",
+    text: "En 10.000 notas, «inflación» aparece en 2.000, «dólar» en 2.500, y las dos juntas en 1.500. «el» aparece en todas las notas. ¿Qué conclusión es correcta?",
+    options: [
+      "Si fueran independientes, se esperarían unas 500 notas con las dos; co-ocurren el triple, lo que sugiere asociación",
+      "«el» e «inflación» son el par más asociado del corpus, porque co-ocurren 2.000 veces, más que con «dólar»",
+      "La correlación entre «inflación» y «dólar» es 0,75, porque 1.500 de las 2.000 notas con «inflación» también tienen «dólar»",
+      "No se puede concluir nada sin embeddings contextuales, porque contar co-ocurrencias no mide ninguna relación"
+    ],
+    answer: 0,
+    explain: "Si las palabras fueran independientes, la proporción de notas con las dos sería 0,20 × 0,25 = 0,05, es decir, <strong>500 notas</strong>. Aparecen juntas en 1.500: el triple de lo esperable por azar. «el» co-ocurre con todo, pero como está en <em>todas</em> las notas, su presencia no dice nada. El 0,75 es la proporción de notas con «inflación» que también tienen «dólar», no una correlación: la correlación de Pearson sobre presencia y ausencia da ≈ <strong>0,58</strong>. Es la diferencia entre co-ocurrencia y correlación: la segunda mira también la <strong>ausencia</strong> y descarta el azar. → Resumen U1 §3 y caso 8.6"
+  },
+  {
+    cat: "U1 · Procesamiento",
+    type: "single",
+    text: "Las notas se van a vectorizar con un modelo de oraciones que procesa hasta 128 tokens. Se comparan dos configuraciones: (I) <code>chunk_size=1000</code> tokens sin solapamiento, y (II) <code>chunk_size=120</code> tokens con <code>chunk_overlap=20</code>. ¿Qué afirmación es correcta?",
+    options: [
+      "Con (I), el modelo trunca cada chunk sin aviso y solo representa sus primeros 128 tokens; (II) respeta el límite",
+      "(I) es mejor: los chunks grandes retienen más contexto, y el modelo procesa completos los 1.000 tokens de cada uno",
+      "(II) produce chunks de exactamente 120 tokens, con un solapamiento exacto de 20 entre chunks consecutivos",
+      "El solapamiento de (II) reduce la cantidad de chunks respecto de usar <code>chunk_overlap=0</code> con el mismo tamaño"
+    ],
+    answer: 0,
+    explain: "Los modelos de oración tienen un <strong>límite de tokens</strong>, y lo que lo supera se <strong>trunca sin aviso</strong>: con (I), cada chunk de 1.000 tokens queda representado solo por su comienzo, y el resto no se puede encontrar. (II) entra en el límite, a cambio de que cada fragmento tenga menos contexto. Además, <code>chunk_size</code> es un <strong>máximo</strong> (no un tamaño exacto), el solapamiento no siempre es exacto (depende de dónde haya un separador) y un overlap mayor <strong>aumenta</strong> la cantidad de chunks. → Resumen U1 §4, U2 §5 y caso 9.4"
+  },
+
+  // ═══════════════ U2 · FRECUENTISTAS ═══════════════
+  {
+    cat: "U2 · Frecuentistas",
+    type: "single",
+    text: "Un corpus tiene cuatro títulos: D1 «suba del dólar», D2 «el dólar cerró en alza», D3 «la inflación de marzo» y D4 «suba de la nafta». Con la fórmula del apunte (TF = ocurrencias / términos del documento; IDF = log(N / df)), ¿cuál es el TF-IDF de «dólar» en D1? ¿Y cuál sería su IDF con el suavizado de sklearn, ln((1 + N) / (1 + df)) + 1?",
+    options: [
+      "(1/3) · log 2 con la fórmula del apunte, e IDF = ln(5/3) + 1 ≈ 1,51 con el suavizado de sklearn",
+      "(1/3) · log 2 con la fórmula del apunte, e IDF = ln 2 + 1 ≈ 1,69 con el suavizado de sklearn",
+      "log 2 con la fórmula del apunte, porque el TF de «dólar» vale 1, e IDF = ln(5/3) + 1 ≈ 1,51 con sklearn",
+      "(1/3) · log 4 con la fórmula del apunte, e IDF = ln(5/3) ≈ 0,51 con el suavizado de sklearn"
+    ],
+    answer: 0,
+    explain: "D1 tiene 3 términos y «dólar» aparece una vez: TF = <strong>1/3</strong>. «dólar» está en 2 de los 4 documentos (D1 y D2): IDF = log(4/2) = <strong>log 2</strong>. Entonces, TF-IDF = (1/3) · log 2. Con sklearn: ln((1 + 4)/(1 + 2)) + 1 = ln(5/3) + 1 ≈ 0,51 + 1 = <strong>1,51</strong>. El 1,69 (ln 2 + 1) es el valor del ejemplo del apunte, con N = 3 y df = 1: no corresponde a este corpus. → Resumen U2 §1.3"
+  },
+  {
+    cat: "U2 · Frecuentistas",
+    type: "multi",
+    text: "El archivo completo se vectoriza con <code>TfidfVectorizer(ngram_range=(1, 2), min_df=5, max_df=0.8, sublinear_tf=True)</code>. ¿Qué afirmaciones son correctas?",
+    options: [
+      "<code>min_df=5</code> descarta los términos que aparecen en menos de 5 notas, como muchos errores de OCR",
+      "<code>max_df=0.8</code> descarta los términos presentes en más del 80 % de las notas, parecido a quitar stopwords",
+      "Con <code>sublinear_tf=True</code>, el TF crece de forma logarítmica, y repetir mucho una palabra no la hace dominar",
+      "<code>ngram_range=(1, 2)</code> reemplaza los unigramas por bigramas, así que la dimensión queda más o menos igual",
+      "Como el IDF ya baja el peso de las palabras comunes, TF-IDF saca las stopwords del vocabulario automáticamente"
+    ],
+    answer: [0, 1, 2],
+    explain: "<code>min_df</code> saca los términos rarísimos (en un archivo con OCR, muchos son errores de reconocimiento que aparecen una sola vez), y <code>max_df</code>, los que están en casi todas las notas. <code>sublinear_tf=True</code> reemplaza el TF por una versión logarítmica (sklearn usa 1 + log(tf)), así que una palabra repetida 50 veces no pesa 50 veces más. Las dos falsas: <code>ngram_range=(1, 2)</code> <strong>suma</strong> los bigramas a los unigramas, y la dimensión <strong>crece</strong>; y TF-IDF <strong>no elimina</strong> las stopwords: les baja el IDF, pero siguen en el vocabulario con un TF altísimo. → Resumen U2 §1.2, §1.3 y trampa 9"
+  },
+  {
+    cat: "U2 · Frecuentistas",
+    type: "single",
+    text: "Con <code>CountVectorizer</code>, ¿cuál es la similitud coseno entre «dólar sube dólar» y «dólar baja»? ¿Y con <code>CountVectorizer(binary=True)</code>?",
+    options: [
+      "≈ 0,63 con conteos y 0,50 con <code>binary=True</code>",
+      "0,50 con conteos y ≈ 0,63 con <code>binary=True</code>",
+      "≈ 0,63 en los dos casos: binarizar no cambia el coseno",
+      "≈ 0,67 con conteos y 0,50 con <code>binary=True</code>"
+    ],
+    answer: 0,
+    explain: "Con el vocabulario [baja, dólar, sube], los vectores son (0, 2, 1) y (1, 1, 0). Producto escalar = 2; normas = √5 y √2; coseno = 2 / √10 ≈ <strong>0,63</strong>. Con <code>binary=True</code>, «dólar» deja de contar dos veces: (0, 1, 1) y (1, 1, 0), producto = 1, normas √2 y √2, coseno = 1/2 = <strong>0,50</strong>. Binarizar cambia el peso de las palabras repetidas, así que sí cambia el coseno. → Resumen U2 §1.2 y §2.2"
+  },
+  {
+    cat: "U2 · Frecuentistas",
+    type: "single",
+    text: "Para probar, se usa <code>HashingVectorizer(n_features=8)</code>, y «inflación» y «fútbol» caen en el mismo índice. ¿Qué consecuencia tiene?",
+    options: [
+      "Una nota de deportes y una de economía pueden tener un coseno distinto de 0 sin compartir ninguna palabra",
+      "Se puede saber cuál de las dos palabras aportó el valor de la columna mirando su signo (<code>alternate_sign</code>)",
+      "El vectorizador da un error al transformar, porque cada término necesita tener un índice único y fijo en la matriz",
+      "Ninguna: las colisiones solo ocurren con funciones hash criptográficas, como MD5 o SHA-256"
+    ],
+    answer: 0,
+    explain: "Es una <strong>colisión</strong>: dos palabras distintas comparten columna, así que dos notas sin palabras en común pueden aparecer relacionadas (o, si los signos son opuestos, con coseno negativo). Con <code>n_features</code> grande (por ejemplo, 2<sup>18</sup> o más) las colisiones son raras; con 8 son seguras. El hashing es <strong>sin estado</strong>: no se puede volver de una columna a su palabra, y el signo alternado solo atenúa el efecto de las colisiones, no las identifica. Las funciones que se usan, como MurmurHash, no son criptográficas, y todas tienen colisiones. → Resumen U2 §1.4"
+  },
+  {
+    cat: "U2 · Frecuentistas",
+    type: "single",
+    text: "Con un vocabulario de 50.000 términos, cada nota tiene unas 400 palabras, de las cuales 250 son distintas. ¿Qué proporción de ceros tiene, aproximadamente, el vector de una nota con <code>CountVectorizer(binary=True)</code>, y en qué se diferencia de un one-hot?",
+    options: [
+      "99,5 %; <code>binary=True</code> representa un documento (qué términos aparecen), y el one-hot, una sola palabra",
+      "99,2 %; <code>binary=True</code> representa un documento (qué términos aparecen), y el one-hot, una sola palabra",
+      "99,5 %; son equivalentes, porque <code>binary=True</code> es el one-hot de cada una de las palabras de la nota",
+      "99,2 %; <code>binary=True</code> cuenta cuántas veces aparece cada término, y el one-hot solo marca presencia"
+    ],
+    answer: 0,
+    explain: "Lo que cuenta son los términos <strong>distintos</strong>: 250 posiciones con 1 sobre 50.000, o sea, un 0,5 % de valores distintos de cero y un <strong>99,5 % de ceros</strong> (el 99,2 % sale de usar las 400 palabras, contando repeticiones). <code>binary=True</code> es el «one-hot <em>de documentos</em>»: marca presencia o ausencia de cada término en la nota. El <strong>one-hot</strong> de la teoría representa <strong>una palabra</strong>: un 1 en su posición y 0 en el resto. → Resumen U2 §1.1 y trampa 11"
+  },
+
+  // ═══════════════ U2 · EMBEDDINGS ═══════════════
+  {
+    cat: "U2 · Embeddings",
+    type: "multi",
+    text: "Sobre Word2Vec, ¿qué afirmaciones son correctas?",
+    options: [
+      "Con 50.000 palabras y vectores de 300 dimensiones, W (entrada → capa oculta) es de 50.000 × 300, y cada fila es un embedding",
+      "El negative sampling reemplaza el softmax sobre todo el vocabulario por una clasificación binaria contra unos pocos pares al azar",
+      "En CBOW, los vectores de las palabras de contexto se promedian para predecir la palabra central de la ventana",
+      "Skip-gram distingue si cada palabra de contexto estaba a la izquierda o a la derecha de la central, y por eso aprende relaciones gramaticales",
+      "Los embeddings son la salida del softmax: un vector de probabilidades sobre todo el vocabulario para cada palabra"
+    ],
+    answer: [0, 1, 2],
+    explain: "La red es superficial: one-hot de tamaño V → capa oculta de N neuronas → softmax de tamaño V, con matrices <strong>W (V × N)</strong> y W′ (N × V). Los embeddings son <strong>los pesos de la capa oculta</strong> (las filas de W), no la salida del softmax. El <strong>negative sampling</strong> evita normalizar sobre todo el vocabulario en cada paso. CBOW promedia el contexto para predecir la palabra central; skip-gram hace lo inverso. Skip-gram <strong>no distingue</strong> izquierda de derecha dentro de la ventana: refleja co-ocurrencias, no gramática. → Resumen U2 §2.4 y trampas 1, 2 y 4"
+  },
+  {
+    cat: "U2 · Embeddings",
+    type: "single",
+    text: "Para recomendar notas relacionadas, un compañero propone representar cada nota (unas 800 palabras) con el promedio de los vectores Word2Vec de sus palabras. ¿Cuál es el problema de fondo y qué lo resuelve?",
+    options: [
+      "El promedio pierde el orden y diluye el significado; lo resuelve un modelo de oraciones como Sentence-BERT",
+      "Ninguno de fondo: alcanza con quitar las stopwords y ponderar cada palabra por su TF-IDF antes de promediar",
+      "Los promedios no se pueden comparar con el coseno, así que hay que pasar a medir la distancia euclidiana",
+      "Word2Vec es contextual y el promedio mezcla contextos distintos; usar FastText en su lugar lo resuelve"
+    ],
+    answer: 0,
+    explain: "El promedio es <strong>conmutativo</strong>: «this is cool» e «is this cool» dan similitud 1,0, y en textos largos todos los promedios tienden a parecerse (en el TP, dos libros al azar daban 0,87 con SBW). Los <strong>parches</strong> (sacar stopwords, ponderar con TF-IDF, n-gramas) ayudan, pero no resuelven el fondo. La solución es un modelo entrenado <strong>de punta a punta</strong> para oraciones, como <strong>Sentence-BERT</strong>; con notas de 800 palabras, además, hay que segmentar por el límite de tokens. Word2Vec no es contextual, y FastText tampoco. → Resumen U2 §4.2 y trampa 12"
+  },
+  {
+    cat: "U2 · Embeddings",
+    type: "single",
+    text: "Con n = 3 y las marcas de inicio y fin (&lt; y &gt;), ¿cuántos n-gramas de caracteres genera FastText para «peso»? ¿Distingue FastText el «peso» moneda del «peso» unidad de masa?",
+    options: [
+      "4 (&lt;pe, pes, eso, so&gt;); no los distingue, porque es estático: hace falta un modelo contextual, como BERT",
+      "2 (pes, eso), porque las marcas no forman n-gramas; no los distingue, porque asigna un único vector a la palabra",
+      "4 (&lt;pe, pes, eso, so&gt;); sí los distingue, porque los n-gramas de caracteres capturan el contexto de la oración",
+      "6, uno por cada carácter más las dos marcas; sí los distingue, porque cada n-grama tiene su propio vector"
+    ],
+    answer: 0,
+    explain: "Con las marcas, «peso» es «&lt;peso&gt;» (6 caracteres), y las ventanas de 3 son 6 − 3 + 1 = <strong>4</strong>: &lt;pe, pes, eso, so&gt;. (FastText suma además un vector para la palabra completa, &lt;peso&gt;.) Los n-gramas aportan <strong>morfología</strong> y vectores para palabras <strong>fuera del vocabulario</strong>, pero FastText sigue siendo <strong>estático</strong>: «peso» tiene un único vector en cualquier oración. La <strong>polisemia</strong> la resuelven los modelos contextuales (ELMo, BERT). → Resumen U2 §2.5 y trampa 3"
+  },
+  {
+    cat: "U2 · Embeddings",
+    type: "single",
+    text: "El recomendador tiene que encontrar, entre 500.000 notas, las más parecidas a la que el lector está leyendo. ¿Qué afirmación es correcta?",
+    options: [
+      "Con un bi-encoder como SBERT, cada nota se codifica una vez; un cross-encoder puede reordenar unos pocos candidatos",
+      "Conviene usar solo un cross-encoder, que es el más preciso: procesar 500.000 pares en cada lectura es viable en tiempo real",
+      "SBERT y un cross-encoder tienen el mismo costo de búsqueda, porque los dos se basan en la arquitectura de BERT",
+      "Con SBERT hay que volver a codificar todo el archivo cada vez que un lector abre una nota, para poder comparar"
+    ],
+    answer: 0,
+    explain: "Un <strong>cross-encoder</strong> procesa cada par de textos junto: es preciso, pero en cada lectura habría que procesar 500.000 pares, y para comparar todo el archivo, una cantidad de pares que crece de forma cuadrática. <strong>SBERT</strong> (un <em>bi-encoder</em>, con redes siamesas) codifica cada nota <strong>una sola vez</strong>, guarda los vectores y compara con el coseno: en el paper, el par más parecido entre 10.000 oraciones pasa de unas 65 horas a unos 5 segundos. Lo habitual es combinarlos: SBERT recupera candidatos y el cross-encoder <strong>reordena</strong> los primeros (el <em>reranking</em> de MTEB). → Resumen U2 §4.3 y caso 9.5"
+  },
+  {
+    cat: "U2 · Embeddings",
+    type: "single",
+    text: "Se proyectan a 2D los embeddings de 10.000 notas. Con PCA, las dos componentes explican el 6 % de la varianza, y las secciones aparecen mezcladas; con t-SNE aparecen grupos claros, y «Deportes» queda muy lejos de «Política». ¿Qué conclusión es válida?",
+    options: [
+      "PCA no prueba nada (descarta el 94 % de la varianza), y en t-SNE vale la cercanía local, no la distancia entre grupos",
+      "PCA prueba que los embeddings no separan las secciones, y los grupos que aparecen en t-SNE son solo un artefacto",
+      "t-SNE prueba que Deportes y Política son las secciones más distintas del diario, por la gran distancia entre sus grupos",
+      "t-SNE es determinista, así que los grupos y sus distancias son iguales en cualquier ejecución y se pueden comparar"
+    ],
+    answer: 0,
+    explain: "Con dos componentes que explican el 6 %, PCA descarta el 94 % de la información: una nube mezclada en 2D <strong>no prueba</strong> que el espacio original no separe. t-SNE es <strong>no lineal y estocástico</strong> (cambia con la semilla y la <code>perplexity</code>) y preserva vecindades locales: las <strong>distancias entre grupos y sus tamaños no se interpretan</strong>. Para medir la separación hay que trabajar en el espacio completo: un clasificador con validación cruzada contra el azar, o clustering comparado con las secciones con <strong>ARI</strong>. → Resumen U2 §3 y caso 9.6"
+  },
+
+  // ═══════════════ DESARROLLO ═══════════════
+  {
+    cat: "Desarrollo",
+    type: "open",
+    text: "<strong>Ingesta del archivo.</strong> Diseñá el pipeline que lleve las tres fuentes del archivo hasta fragmentos listos para vectorizar con un modelo de oraciones de 512 tokens: (a) las notas escaneadas de 1985–1999, a dos columnas y con epígrafes de fotos; (b) el CSV de 2000–2012, en el que conviven registros guardados en UTF-8 y en Latin-1; (c) las notas web actuales, con comentarios que se cargan con JavaScript. Para cada etapa, indicá la herramienta, qué información se puede perder y cómo validarías el resultado. Justificá también qué limpieza aplicarías y cuál no, sabiendo que los fragmentos van a un modelo de oraciones.",
+    answer: "<strong>(a) Escaneos:</strong> no tienen capa de texto (<code>extract_text()</code> devuelve vacío), así que hace falta OCR. Por las dos columnas y los epígrafes, conviene un conversor que reconstruya el <strong>orden de lectura</strong>, como <strong>MinerU</strong> o <strong>Marker</strong> (pesados, suelen pedir GPU) o <strong>Docling</strong>; la alternativa básica es pdf2image + pytesseract, preprocesando la imagen. <em>Se pierde:</em> caracteres mal reconocidos, el orden de las columnas si se leen de corrido, y los epígrafes mezclados con el cuerpo. <em>Validación:</em> comparar a mano una muestra con el original. <strong>(b) CSV con codificaciones mezcladas:</strong> no sirve elegir una sola codificación para todo el archivo, y <strong>Latin-1 nunca da error</strong>, así que «no dio error» no prueba nada. Se lee en bytes y se decodifica <strong>registro por registro</strong>: primero como UTF-8 y, si falla, como Latin-1. Los registros que ya quedaron con mojibake («Ã­», «Ã³») se reparan con <code>encode('latin-1').decode('utf-8')</code>, y todo se guarda en UTF-8. <em>Validación:</em> contar los patrones «Ã», «√» y «�» antes y después. <strong>(c) Web con JavaScript:</strong> <code>requests</code> solo trae el HTML inicial; los comentarios requieren <strong>Playwright</strong> (o Selenium) para renderizar y <strong>BeautifulSoup</strong> para extraer los campos, con pausas entre pedidos, manejo de errores, guardado incremental, deduplicación por URL y respeto de los términos de servicio y del <code>robots.txt</code>. <strong>Limpieza:</strong> sacar el ruido de formato (encabezados y pies repetidos, números de página, guiones de corte de línea del OCR, restos de HTML), expandir abreviaturas y separar los epígrafes del cuerpo (o guardarlos como metadato). <strong>No</strong> pasar a minúsculas, ni sacar stopwords, puntuación o tildes, ni hacer stemming: <strong>el preprocesamiento pertenece al modelo</strong>, y un modelo de oraciones se entrenó con texto natural y usa el orden, las negaciones y las palabras funcionales. Si además se usa TF-IDF, se guarda una segunda versión, limpia. <strong>Segmentación:</strong> chunking recursivo o por párrafos, sin mezclar notas, con <code>chunk_size</code> medido con el <strong>tokenizador del modelo</strong> y por debajo de 512 tokens (si no, se trunca sin aviso), y un solapamiento chico. Cada chunk lleva como metadatos la nota, la fecha, la sección, la fuente y la página. <em>Validación:</em> contar cuántos fragmentos superan el límite (tienen que ser cero) y revisar que no se corten oraciones.",
+    points: [
+      "Escaneos: OCR con un conversor que reconstruya el orden de lectura a dos columnas, y validación por muestra",
+      "CSV mezclado: decodificar registro por registro, reparar el mojibake y saber que Latin-1 nunca da error",
+      "Web: Playwright para renderizar y BeautifulSoup para extraer, con cuidados técnicos y éticos",
+      "Limpieza mínima para un modelo de oraciones: el preprocesamiento pertenece al modelo",
+      "Chunks por debajo de 512 tokens (medidos con el tokenizador), con solapamiento y metadatos"
+    ]
+  },
+  {
+    cat: "Desarrollo",
+    type: "open",
+    text: "<strong>Del buscador léxico al semántico.</strong> Hoy el diario busca con TF-IDF y quiere pasar a embeddings de oraciones. (a) Un lector busca «notas sobre la escasez de combustible», y las notas relevantes hablan de «faltante de nafta» y de «estaciones de servicio sin GNC». Explicá por qué TF-IDF no las encuentra, y en qué consultas es probable que siga ganando. (b) ¿Cómo elegirías el modelo de embeddings, y qué preprocesamiento le aplicarías al texto antes de codificarlo? (c) Un prototipo obtiene una precision@10 de 0,35 en consultas del tipo «notas de deportes», y Deportes es el 30 % del archivo. ¿Cómo interpretás ese resultado, y cómo diseñarías una evaluación que sí permita comparar el buscador nuevo con el actual?",
+    answer: "<strong>(a)</strong> TF-IDF es <strong>léxico</strong>: cada palabra es una dimensión independiente, y el coseno mide coincidencia de palabras. La consulta y las notas no comparten ninguna palabra con contenido («escasez» y «faltante», «combustible» y «nafta»), así que la similitud es ≈ 0. Los embeddings de oraciones son <strong>densos y aprendidos</strong>, y ubican cerca los textos con el mismo significado aunque usen otras palabras. TF-IDF probablemente siga ganando en consultas <strong>literales</strong> (nombres propios, siglas, números de ley, frases exactas), donde la coincidencia exacta es justamente lo que se busca. Por eso conviene una búsqueda <strong>híbrida</strong>. <strong>(b)</strong> Elegir con <strong>MTEB</strong> (un benchmark, no un modelo), mirando la tarea de <strong>retrieval</strong>; filtrar los modelos <strong>multilingües o en español</strong>; considerar el tamaño (RAM y latencia), el <strong>límite de tokens</strong> y los prefijos que pida el modelo (con E5, <code>query:</code> para las consultas y <code>passage:</code> para los fragmentos), y validarlo con pares propios. No hace falta reentrenar. Preprocesamiento <strong>mínimo</strong> (codificación, ruido de formato, abreviaturas), sin sacar stopwords ni puntuación, porque el modelo se entrenó con texto natural; y <strong>chunking</strong> para no superar el límite de tokens. Se vectoriza todo una sola vez y se guardan los vectores normalizados. <strong>(c)</strong> Para esas consultas, elegir 10 notas <strong>al azar</strong> ya da una precision@10 esperada de <strong>0,30</strong>: el 0,35 casi no supera el azar. Además, la consulta es demasiado amplia (casi un tercio del archivo es relevante) y no se comparó con TF-IDF. Una evaluación útil: consultas <strong>propias y variadas</strong>, con <strong>pocos relevantes</strong> cada una (para que el piso del azar sea bajo), definidos <strong>antes</strong> de ver los resultados; consultas <strong>sin solapamiento léxico</strong> con sus relevantes, donde TF-IDF no puede ganar; y precision@k del buscador nuevo contra <strong>TF-IDF</strong> y contra el <strong>azar</strong>. Analizar por tipo de consulta y los casos de falla, y aclarar qué no mide precision@k (el <em>recall</em>, el orden dentro del top-k) y que con pocas consultas es ruidosa.",
+    points: [
+      "TF-IDF mide coincidencia léxica (similitud ≈ 0 sin palabras en común); los embeddings, significado",
+      "TF-IDF sigue ganando en consultas literales (nombres propios, siglas, números): búsqueda híbrida",
+      "Elegir el modelo con MTEB (retrieval, español, tamaño, límite de tokens, prefijos) y validarlo",
+      "Preprocesamiento mínimo para el modelo de oraciones, más chunking",
+      "0,35 contra un azar de 0,30: casi no mejora, y faltaba la línea de base",
+      "Evaluación: consultas propias con pocos relevantes definidos antes, sin solapamiento léxico, contra TF-IDF y el azar"
+    ]
+  }
+];
+
+/* ═══════════════════════ FIN DATOS DEL QUIZ ═══════════════════════ */
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inria+Sans:wght@300;400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f0e6;
+    --paper-deep: #ece4d3;
+    --card: #fffcf4;
+    --ink: #1a1612;
+    --ink-soft: #5a4d3e;
+    --rule: #c8b99a;
+    --accent: #8b1a1a;
+    --accent-tint: rgba(139, 26, 26, 0.06);
+    --correct: #3d5a2c;
+    --correct-tint: rgba(61, 90, 44, 0.09);
+    --wrong: #9b2020;
+    --wrong-tint: rgba(139, 26, 26, 0.07);
+    --partial: #9a5f12;
+    --partial-tint: rgba(184, 115, 31, 0.11);
+    --on-strong: #ffffff;
+    --shadow: rgba(26, 22, 18, 0.08);
+    --serif: 'EB Garamond', Georgia, serif;
+    --sans: 'Inria Sans', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171411; --paper-deep: #221e19; --card: #1e1a16; --ink: #ede5d6; --ink-soft: #b3a58d;
+      --rule: #4a4034; --accent: #e07a6f; --accent-tint: rgba(224, 122, 111, 0.1);
+      --correct: #9cc47f; --correct-tint: rgba(156, 196, 127, 0.11); --wrong: #ee8579; --wrong-tint: rgba(238, 133, 121, 0.1);
+      --partial: #e0a95c; --partial-tint: rgba(224, 169, 92, 0.12); --on-strong: #171411; --shadow: rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #171411; --paper-deep: #221e19; --card: #1e1a16; --ink: #ede5d6; --ink-soft: #b3a58d;
+    --rule: #4a4034; --accent: #e07a6f; --accent-tint: rgba(224, 122, 111, 0.1);
+    --correct: #9cc47f; --correct-tint: rgba(156, 196, 127, 0.11); --wrong: #ee8579; --wrong-tint: rgba(238, 133, 121, 0.1);
+    --partial: #e0a95c; --partial-tint: rgba(224, 169, 92, 0.12); --on-strong: #171411; --shadow: rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.6; min-height: 100vh; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .container { max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  .hidden { display: none !important; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--paper-deep); padding: 0.05rem 0.3rem; border-radius: 2px; }
+  sub, sup { line-height: 0; }
+
+  /* HEADER */
+  .header { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; margin-bottom: 2rem; position: relative; }
+  .header-eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem; padding-right: 3rem; }
+  .header h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(2rem, 5vw, 2.8rem); line-height: 1.1; letter-spacing: -0.01em; }
+  .header h1 em { color: var(--accent); font-style: italic; }
+  .header-meta { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }
+  .header-meta strong { color: var(--ink); }
+  .theme-toggle { position: absolute; top: 0; right: 0; width: 2.2rem; height: 2.2rem; border: 1px solid var(--rule); border-radius: 50%; background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; }
+  .theme-toggle:hover { border-color: var(--ink); }
+
+  /* BANNER */
+  .banner { border: 1px solid var(--wrong); background: var(--wrong-tint); border-radius: 3px; padding: 0.9rem 1.1rem; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .banner ul { margin: 0.4rem 0 0 1.2rem; }
+
+  /* START */
+  .start-info { font-family: var(--serif); font-size: 1.15rem; color: var(--ink-soft); margin-bottom: 1.5rem; }
+  .start-info strong { color: var(--ink); }
+  .panel { border: 1px solid var(--rule); background: var(--card); border-radius: 4px; padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; box-shadow: 0 4px 16px var(--shadow); }
+  .panel-title { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.8rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .panel-title .links { text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
+  .link { background: none; border: none; color: var(--ink-soft); text-decoration: underline; cursor: pointer; font-family: var(--mono); font-size: 0.72rem; padding: 0; }
+  .link:hover { color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .chip { border: 1px solid var(--rule); background: var(--paper); border-radius: 999px; padding: 0.35rem 0.85rem; cursor: pointer; font-size: 0.88rem; transition: all 0.15s ease; }
+  .chip strong { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); margin-left: 0.3rem; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+  .chip[aria-pressed="true"] strong { color: var(--accent); }
+  #cat-chips .chip[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
+  .setup-row { display: flex; flex-wrap: wrap; gap: 0.8rem 1.6rem; align-items: center; margin-top: 1.1rem; font-size: 0.92rem; }
+  .field select { margin-left: 0.4rem; padding: 0.3rem 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); }
+  .check { display: inline-flex; gap: 0.45rem; align-items: center; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 1rem; height: 1rem; }
+  .types-line { margin-top: 1rem; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+  .start-actions { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; margin: 1.5rem 0 2rem; }
+  .selection-summary { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }
+  .resume { border-left: 3px solid var(--accent); }
+  .resume p { margin-bottom: 0.8rem; }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .history-table td, .history-table th { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--rule); text-align: left; }
+  .history-table th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 400; }
+  .history-table td.num { font-family: var(--mono); text-align: right; }
+  .kbd-help { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); line-height: 2; }
+  kbd { font-family: var(--mono); font-size: 0.7rem; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0.05rem 0.35rem; background: var(--card); }
+
+  /* PROGRESS */
+  .progress-wrap { margin-bottom: 1.5rem; font-family: var(--mono); }
+  .progress-label { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 0.5rem; }
+  .progress-label > span:first-child { white-space: nowrap; }
+  .progress-label .right { display: flex; gap: 1rem; align-items: baseline; min-width: 0; }
+  #q-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-bar { height: 4px; background: var(--paper-deep); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+  /* QUESTION CARD */
+  .question-card { background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 2rem 2rem 1.5rem; box-shadow: 0 4px 16px var(--shadow); margin-bottom: 1.5rem; position: relative; }
+  .question-card::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: var(--accent); }
+  .question-card.shake { animation: shake 0.3s; }
+  @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .question-meta { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .question-tag { display: inline-block; border: 1px solid var(--rule); padding: 0.1rem 0.5rem; border-radius: 2px; color: var(--ink-soft); background: var(--paper); letter-spacing: 0.08em; }
+  .question-text { font-family: var(--serif); font-size: 1.3rem; line-height: 1.45; margin-bottom: 1.3rem; }
+  .question-text em { color: var(--accent); }
+  .hint { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); margin: -0.6rem 0 1rem; }
+  .hint strong { color: var(--accent); }
+  .snippet { font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; background: var(--paper); border-left: 2px solid var(--ink-soft); padding: 1rem 1.2rem; margin: -0.3rem 0 1.2rem; overflow-x: auto; white-space: pre; }
+
+  /* OPTIONS */
+  .options { display: flex; flex-direction: column; gap: 0.6rem; }
+  .option { display: flex; align-items: flex-start; gap: 0.85rem; width: 100%; text-align: left; padding: 0.85rem 1rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; font-family: var(--serif); font-size: 1.05rem; line-height: 1.4; }
+  .option:hover:not(:disabled) { border-color: var(--ink); background: var(--card); }
+  .option:disabled { cursor: default; }
+  .option.selected { border-color: var(--accent); background: var(--accent-tint); }
+  .option.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .option.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .option.missed { border-color: var(--correct); border-style: dashed; }
+  .option-marker { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1.5px solid var(--ink-soft); flex-shrink: 0; margin-top: 0.12rem; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+  .marker-radio { border-radius: 50%; }
+  .marker-check { border-radius: 3px; }
+  .option.selected .option-marker { background: var(--accent); border-color: var(--accent); color: var(--on-strong); }
+  .option.correct .option-marker { background: var(--correct); border-color: var(--correct); color: var(--on-strong); }
+  .option.wrong .option-marker { background: var(--wrong); border-color: var(--wrong); color: var(--on-strong); }
+  .option.missed .option-marker { border-color: var(--correct); color: var(--correct); }
+  .option-text { flex: 1; }
+
+  /* TEXT */
+  .text-input, .text-area { width: 100%; padding: 0.85rem 1rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font-size: 1rem; }
+  .text-input { font-family: var(--mono); }
+  .text-area { font-family: var(--serif); font-size: 1.05rem; line-height: 1.5; resize: vertical; min-height: 7rem; }
+  .text-input:focus, .text-area:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  .text-input.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .text-input.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+
+  /* MATCH */
+  .match { display: flex; flex-direction: column; gap: 0.6rem; }
+  .match-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 0.6rem 1rem; align-items: center; padding: 0.7rem 0.9rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); }
+  .match-left { font-family: var(--serif); font-size: 1.05rem; font-weight: 500; }
+  .match-select { width: 100%; padding: 0.45rem 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); font-size: 0.92rem; }
+  .match-row.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .match-row.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .match-fb { grid-column: 1 / -1; font-size: 0.85rem; color: var(--correct); }
+  .match-fb:empty { display: none; }
+
+  /* ORDER */
+  .order { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .order-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0.8rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font-family: var(--serif); font-size: 1.05rem; }
+  .order-pos { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); width: 1.4rem; text-align: center; flex-shrink: 0; }
+  .order-text { flex: 1; }
+  .order-btns { display: flex; gap: 0.3rem; }
+  .order-btn { width: 2rem; height: 2rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); cursor: pointer; font-size: 0.75rem; }
+  .order-btn:hover:not(:disabled) { border-color: var(--ink); }
+  .order-btn:disabled { opacity: 0.3; cursor: default; }
+  .order-item.correct { border-color: var(--correct); background: var(--correct-tint); }
+  .order-item.wrong { border-color: var(--wrong); background: var(--wrong-tint); }
+  .order-note { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+
+  /* FEEDBACK */
+  .feedback { margin-top: 1.2rem; padding: 1rem 1.2rem; border-radius: 3px; font-family: var(--serif); font-size: 1.05rem; line-height: 1.5; border-left: 3px solid var(--rule); background: var(--paper); }
+  .feedback.correct { background: var(--correct-tint); border-left-color: var(--correct); }
+  .feedback.wrong { background: var(--wrong-tint); border-left-color: var(--wrong); }
+  .feedback.partial { background: var(--partial-tint); border-left-color: var(--partial); }
+  .feedback-label { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.5rem; display: block; }
+  .feedback.correct .feedback-label { color: var(--correct); }
+  .feedback.wrong .feedback-label { color: var(--wrong); }
+  .feedback.partial .feedback-label { color: var(--partial); }
+  .fb-extra { margin-bottom: 0.6rem; }
+  .fb-extra ol, .fb-extra ul, .fb-explain ul, .fb-explain ol { margin: 0.3rem 0 0 1.4rem; }
+  .model-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0.2rem 0 0.35rem; }
+  .model-text { margin-bottom: 0.8rem; }
+  .model-points { margin: 0 0 0.6rem 1.3rem; }
+  .fb-explain { padding-top: 0.6rem; border-top: 1px solid var(--rule); margin-top: 0.4rem; }
+  .fb-extra:only-child, .fb-explain:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .grade-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
+  .grade-row span { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-soft); margin-right: 0.3rem; }
+  .btn-grade { border: 1.5px solid var(--rule); background: var(--card); padding: 0.5rem 0.9rem; border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 0.8rem; }
+  .btn-grade[data-g="correct"]:hover { border-color: var(--correct); color: var(--correct); }
+  .btn-grade[data-g="partial"]:hover { border-color: var(--partial); color: var(--partial); }
+  .btn-grade[data-g="wrong"]:hover { border-color: var(--wrong); color: var(--wrong); }
+
+  /* CONTROLS */
+  .controls { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .btn { font-family: var(--mono); font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.85rem 1.6rem; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; transition: all 0.15s ease; border-radius: 2px; }
+  .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-strong); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--ink); }
+  .btn-secondary:hover:not(:disabled) { background: var(--paper-deep); color: var(--ink); border-color: var(--ink); }
+  .btn-small { padding: 0.55rem 1rem; font-size: 0.75rem; }
+
+  /* RESULTS */
+  .results { text-align: center; padding: 2rem 0 1rem; }
+  .results-eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 1rem; }
+  .results-score { font-family: var(--serif); font-size: clamp(4rem, 12vw, 7rem); line-height: 1; font-weight: 600; margin-bottom: 0.5rem; }
+  .results-fraction { font-family: var(--serif); font-size: 1.2rem; color: var(--ink-soft); margin-bottom: 1.5rem; font-style: italic; }
+  .results-message { font-family: var(--serif); font-size: 1.25rem; max-width: 500px; margin: 0 auto 2rem; font-style: italic; color: var(--ink-soft); }
+  .results-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.8rem; max-width: 560px; margin: 0 auto 2rem; }
+  .stat { padding: 1rem 0.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+  .stat-num { font-family: var(--serif); font-size: 2rem; font-weight: 600; line-height: 1; margin-bottom: 0.3rem; }
+  .stat-label { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+  .stat.good .stat-num { color: var(--correct); }
+  .stat.bad .stat-num { color: var(--wrong); }
+  .stat.mid .stat-num { color: var(--partial); }
+  .section-title { font-family: var(--serif); font-size: 1.15rem; margin-bottom: 1rem; color: var(--ink-soft); font-style: italic; }
+  .cat-results { max-width: 560px; margin: 0 auto 2rem; text-align: left; }
+  .cat-row { padding: 0.65rem 1rem; margin-bottom: 0.45rem; background: var(--card); border: 1px solid var(--rule); border-radius: 3px; }
+  .cat-row-top { display: flex; justify-content: space-between; gap: 1rem; font-family: var(--serif); }
+  .cat-row-score { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); white-space: nowrap; }
+  .cat-row-score strong { color: var(--ink); }
+  .cat-bar { height: 3px; background: var(--paper-deep); border-radius: 2px; margin-top: 0.45rem; overflow: hidden; }
+  .cat-bar div { height: 100%; }
+  .results-actions { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+  .ornament { text-align: center; color: var(--rule); font-size: 1.5rem; margin: 1.5rem 0; letter-spacing: 1rem; }
+
+  /* REVIEW */
+  .review-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin: 3rem 0 1.5rem; }
+  .review-head h2 { font-family: var(--serif); font-size: 1.8rem; }
+  .review-filter { display: flex; gap: 0.4rem; }
+  .review-item { margin-bottom: 1.2rem; padding: 1.2rem 1.25rem; background: var(--card); border: 1px solid var(--rule); border-left-width: 3px; border-radius: 3px; }
+  .review-item.correct { border-left-color: var(--correct); }
+  .review-item.wrong, .review-item.skipped { border-left-color: var(--wrong); }
+  .review-item.partial { border-left-color: var(--partial); }
+  .review-meta { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.5rem; color: var(--ink-soft); }
+  .review-meta .st-correct { color: var(--correct); }
+  .review-meta .st-wrong, .review-meta .st-skipped { color: var(--wrong); }
+  .review-meta .st-partial { color: var(--partial); }
+  .review-q { font-family: var(--serif); font-size: 1.1rem; margin-bottom: 0.6rem; }
+  .review-line { font-size: 0.92rem; margin-bottom: 0.3rem; }
+  .review-line > em { color: var(--ink-soft); }
+  .review-block { margin: 0.25rem 0 0.2rem 1rem; }
+  .review-explain { font-size: 0.92rem; padding-top: 0.5rem; margin-top: 0.5rem; border-top: 1px solid var(--rule); color: var(--ink-soft); }
+
+  @media (max-width: 640px) {
+    .container { padding: 2rem 1rem 3rem; }
+    .question-card { padding: 1.5rem 1.1rem 1.2rem; }
+    .question-text { font-size: 1.15rem; }
+    .snippet { font-size: 0.72rem; }
+    .match-row { grid-template-columns: 1fr; }
+    .controls .btn { padding: 0.8rem 1.1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="header-eyebrow" id="h-eyebrow"></div>
+    <h1 id="h-title"></h1>
+    <div class="header-meta" id="h-meta"></div>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema claro/oscuro" title="Cambiar tema"></button>
+  </header>
+
+  <div id="errors-banner" class="banner hidden" role="alert"></div>
+
+  <!-- INICIO -->
+  <main id="start-screen">
+    <p class="start-info" id="start-desc"></p>
+
+    <section class="panel resume hidden" id="resume-panel">
+      <div class="panel-title">Intento sin terminar</div>
+      <p id="resume-text"></p>
+      <div class="start-actions" style="margin: 0;">
+        <button class="btn btn-small" id="btn-resume" type="button">Continuar →</button>
+        <button class="btn btn-secondary btn-small" id="btn-discard" type="button">Descartar</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <span>Temas</span>
+        <span class="links"><button class="link" id="cats-all" type="button">todos</button> · <button class="link" id="cats-none" type="button">ninguno</button></span>
+      </div>
+      <div class="chips" id="cat-chips"></div>
+      <div class="setup-row">
+        <label class="field">Cantidad<select id="opt-count"></select></label>
+        <label class="check"><input type="checkbox" id="opt-shuffle"> Mezclar orden de preguntas</label>
+        <label class="check" id="opt-open-wrap"><input type="checkbox" id="opt-open"> Incluir preguntas de desarrollo</label>
+      </div>
+      <div class="types-line" id="types-line"></div>
+    </section>
+
+    <div class="start-actions">
+      <button class="btn" id="btn-start" type="button">Empezar →</button>
+      <button class="btn btn-secondary hidden" id="btn-review-failed" type="button"></button>
+      <span class="selection-summary" id="selection-summary"></span>
+    </div>
+
+    <section class="panel hidden" id="history-panel">
+      <div class="panel-title"><span>Intentos anteriores</span><span class="links"><button class="link" id="btn-clear-history" type="button">borrar historial</button></span></div>
+      <table class="history-table" id="history-table"></table>
+    </section>
+
+    <p class="kbd-help">
+      Atajos: <kbd>1</kbd>–<kbd>9</kbd> elegir opción · <kbd>Enter</kbd> verificar / siguiente · <kbd>S</kbd> saltar · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> desde un texto de desarrollo
+    </p>
+  </main>
+
+  <!-- QUIZ -->
+  <main id="quiz-screen" class="hidden">
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Pregunta <span id="q-current">1</span> / <span id="q-total">1</span></span>
+        <span class="right"><span id="q-category"></span><button class="link" id="btn-finish" type="button">terminar</button></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    </div>
+
+    <article class="question-card" id="q-card"></article>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="btn-skip" type="button">Saltar</button>
+      <button class="btn" id="btn-action" type="button">Verificar</button>
+    </div>
+  </main>
+
+  <!-- RESULTADOS -->
+  <main id="results-screen" class="hidden">
+    <div class="results">
+      <div class="results-eyebrow" id="results-eyebrow">Resultado final</div>
+      <div class="results-score" id="results-score">0%</div>
+      <div class="results-fraction" id="results-fraction"></div>
+      <p class="results-message" id="results-message"></p>
+      <div class="results-stats" id="results-stats"></div>
+      <div class="ornament">· · ·</div>
+      <h3 class="section-title">Desempeño por tema</h3>
+      <div class="cat-results" id="cat-results"></div>
+      <div class="results-actions">
+        <button class="btn" id="btn-review" type="button">Revisar respuestas</button>
+        <button class="btn btn-secondary hidden" id="btn-retry-failed" type="button"></button>
+        <button class="btn btn-secondary" id="btn-home" type="button">Volver al inicio</button>
+      </div>
+    </div>
+
+    <section id="review-section" class="hidden">
+      <div class="review-head">
+        <h2>Revisión</h2>
+        <div class="review-filter">
+          <button class="chip" type="button" data-filter="all" aria-pressed="true">Todas</button>
+          <button class="chip" type="button" data-filter="failed" aria-pressed="false">Solo falladas</button>
+        </div>
+      </div>
+      <div id="review-list"></div>
+    </section>
+  </main>
+
+</div>
+
+<script>
+/* ═══════════════════════ MOTOR · no hace falta editar ═══════════════════════ */
+(function () {
+  'use strict';
+
+  // ───────── utilidades ─────────
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const parser = new DOMParser();
+  const plain = (html) => (parser.parseFromString(String(html ?? ''), 'text/html').body.textContent || '').trim();
+  const range = (n) => Array.from({ length: n }, (_, i) => i);
+  const isStr = (x) => typeof x === 'string' && x.trim() !== '';
+  const isIdx = (x, n) => Number.isInteger(x) && x >= 0 && x < n;
+  const fmtNum = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1).replace('.', ','));
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function hash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+    },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* sin almacenamiento */ } },
+    del(key) { try { localStorage.removeItem(key); } catch (e) { /* sin almacenamiento */ } }
+  };
+  const quizId = isStr(QUIZ.id) ? QUIZ.id : 'quiz';
+  const K = (name) => `quiz:${quizId}:${name}`;
+
+  // ───────── validación y banco ─────────
+  const TYPES = {
+    single: 'Opción única', multi: 'Opción múltiple', tf: 'Verdadero o falso', text: 'Respuesta corta',
+    match: 'Emparejar', order: 'Ordenar', open: 'Desarrollo'
+  };
+  const TYPE_PLURAL = {
+    single: 'opción única', multi: 'opción múltiple', tf: 'V/F', text: 'respuesta corta',
+    match: 'emparejar', order: 'ordenar', open: 'desarrollo'
+  };
+
+  function validate(q) {
+    if (!q || typeof q !== 'object') return ['no es un objeto'];
+    const e = [];
+    if (!isStr(q.cat)) e.push('falta "cat"');
+    if (!TYPES[q.type]) e.push(`"type" inválido (${q.type})`);
+    if (!isStr(q.text)) e.push('falta "text"');
+    const optsOk = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(isStr);
+    switch (q.type) {
+      case 'single':
+        if (!optsOk) e.push('"options" necesita al menos 2 textos');
+        else if (!isIdx(q.answer, q.options.length)) e.push('"answer" debe ser un índice válido de "options"');
+        break;
+      case 'multi':
+        if (!optsOk) e.push('"options" necesita al menos 2 textos');
+        else if (!Array.isArray(q.answer) || !q.answer.length || !q.answer.every((i) => isIdx(i, q.options.length)) || new Set(q.answer).size !== q.answer.length)
+          e.push('"answer" debe ser una lista de índices válidos, sin repetir');
+        break;
+      case 'tf':
+        if (typeof q.answer !== 'boolean') e.push('"answer" debe ser true o false');
+        break;
+      case 'text':
+        if (!Array.isArray(q.answers) || !q.answers.length || !q.answers.every(isStr)) e.push('"answers" debe ser una lista de respuestas aceptadas');
+        break;
+      case 'match':
+        if (!Array.isArray(q.pairs) || q.pairs.length < 2 || !q.pairs.every((p) => Array.isArray(p) && p.length === 2 && isStr(p[0]) && isStr(p[1])))
+          e.push('"pairs" debe ser una lista de al menos 2 pares [izquierda, derecha]');
+        else if (q.extra && (!Array.isArray(q.extra) || !q.extra.every(isStr))) e.push('"extra" debe ser una lista de textos');
+        else {
+          const rights = q.pairs.map((p) => plain(p[1])).concat((q.extra || []).map(plain));
+          if (new Set(rights).size !== rights.length) e.push('las opciones de la derecha (incluidas las de "extra") no pueden repetirse');
+        }
+        break;
+      case 'order':
+        if (!Array.isArray(q.items) || q.items.length < 2 || !q.items.every(isStr)) e.push('"items" debe ser una lista de al menos 2 elementos, en el orden correcto');
+        break;
+      case 'open':
+        if (!isStr(q.answer)) e.push('"answer" debe contener la respuesta modelo');
+        if (q.points && (!Array.isArray(q.points) || !q.points.every(isStr))) e.push('"points" debe ser una lista de textos');
+        break;
+    }
+    return e;
+  }
+
+  const BANK = [];
+  const ERRORS = [];
+  const usedIds = new Set();
+  (Array.isArray(QUESTIONS) ? QUESTIONS : []).forEach((q, n) => {
+    const errs = validate(q);
+    if (errs.length) {
+      ERRORS.push({ n: n + 1, text: plain(q && q.text).slice(0, 80), errs });
+      return;
+    }
+    let id = isStr(q.id) ? q.id : hash(q.type + '|' + plain(q.text));
+    while (usedIds.has(id)) id += '_';
+    usedIds.add(id);
+    BANK.push(Object.assign({}, q, { id, n }));
+  });
+  const BY_ID = new Map(BANK.map((q) => [q.id, q]));
+  const CATS = [...new Set(BANK.map((q) => q.cat))];
+  const HAS_OPEN = BANK.some((q) => q.type === 'open');
+  if (ERRORS.length) console.warn('Preguntas omitidas por errores de formato:', ERRORS);
+
+  // ───────── estado ─────────
+  let S = null;          // sesión en curso
+  let LAST = null;       // último resultado mostrado
+  let reviewFilter = 'all';
+  const card = $('#q-card');
+
+  const defaults = { cats: CATS.slice(), count: 'all', shuffle: true, open: true };
+  const settings = Object.assign({}, defaults, store.get(K('settings'), {}));
+  settings.cats = (settings.cats || []).filter((c) => CATS.includes(c));
+  if (!settings.cats.length) settings.cats = CATS.slice();
+  const saveSettings = () => store.set(K('settings'), settings);
+
+  const saveSession = () => { if (S) store.set(K('session'), S); };
+  const clearSession = () => store.del(K('session'));
+  const curQ = () => BY_ID.get(S.ids[S.cur]);
+
+  function loadSession() {
+    const s = store.get(K('session'), null);
+    if (!s || !Array.isArray(s.ids) || !s.ids.length || !s.ids.every((id) => BY_ID.has(id)) || !isIdx(s.cur, s.ids.length)) {
+      if (s) clearSession();
+      return null;
+    }
+    return s;
+  }
+
+  function recordStats(q, r) {
+    const st = store.get(K('qstats'), {});
+    const cur = st[q.id] || { seen: 0, ok: 0 };
+    cur.seen += 1;
+    if (r.status === 'correct') cur.ok += 1;
+    cur.last = r.status;
+    st[q.id] = cur;
+    store.set(K('qstats'), st);
+  }
+
+  function failedFromHistory() {
+    const st = store.get(K('qstats'), {});
+    return BANK.filter((q) => st[q.id] && st[q.id].last !== 'correct').map((q) => q.id);
+  }
+
+  // ───────── tema claro / oscuro ─────────
+  const root = document.documentElement;
+  const savedTheme = store.get('quiz:theme', null);
+  if (savedTheme === 'light' || savedTheme === 'dark') root.dataset.theme = savedTheme;
+  const effectiveTheme = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const paintToggle = () => { $('#theme-toggle').textContent = effectiveTheme() === 'dark' ? '☀' : '☾'; };
+  $('#theme-toggle').addEventListener('click', () => {
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    store.set('quiz:theme', next);
+    paintToggle();
+  });
+  paintToggle();
+
+  // ───────── pantallas ─────────
+  let screen = 'start';
+  function show(name) {
+    screen = name;
+    $('#start-screen').classList.toggle('hidden', name !== 'start');
+    $('#quiz-screen').classList.toggle('hidden', name !== 'quiz');
+    $('#results-screen').classList.toggle('hidden', name !== 'results');
+    window.scrollTo({ top: 0 });
+  }
+
+  // ───────── encabezado ─────────
+  document.title = plain(QUIZ.titulo || 'Quiz') + (QUIZ.subtitulo ? ' — ' + plain(QUIZ.subtitulo) : '');
+  $('#h-eyebrow').innerHTML = QUIZ.eyebrow || '';
+  $('#h-title').innerHTML = QUIZ.titulo || 'Quiz';
+  $('#h-meta').innerHTML =
+    `<span><strong>${BANK.length}</strong> preguntas</span>` +
+    (QUIZ.subtitulo ? `<span>${QUIZ.subtitulo}</span>` : '') +
+    `<span><strong>${CATS.length}</strong> ${CATS.length === 1 ? 'tema' : 'temas'}</span>`;
+
+  if (ERRORS.length) {
+    const b = $('#errors-banner');
+    b.innerHTML = `<strong>${ERRORS.length} ${ERRORS.length === 1 ? 'pregunta tiene' : 'preguntas tienen'} errores de formato y se omitieron:</strong><ul>` +
+      ERRORS.map((x) => `<li>#${x.n} «${esc(x.text)}…»: ${esc(x.errs.join('; '))}</li>`).join('') + '</ul>';
+    b.classList.remove('hidden');
+  }
+
+  // ───────── pantalla de inicio ─────────
+  function pool() {
+    return BANK.filter((q) => settings.cats.includes(q.cat) && (settings.open || q.type !== 'open'));
+  }
+
+  function renderStart() {
+    $('#start-desc').innerHTML = QUIZ.descripcion || '';
+
+    $('#cat-chips').innerHTML = CATS.map((c) => {
+      const n = BANK.filter((q) => q.cat === c && (settings.open || q.type !== 'open')).length;
+      return `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${settings.cats.includes(c)}">${esc(c)}<strong>${n}</strong></button>`;
+    }).join('');
+
+    $('#opt-shuffle').checked = !!settings.shuffle;
+    $('#opt-open').checked = !!settings.open;
+    $('#opt-open-wrap').classList.toggle('hidden', !HAS_OPEN);
+
+    const avail = pool().length;
+    const sizes = [10, 15, 20, 30, 40, 50, 75, 100].filter((n) => n < avail);
+    if (settings.count !== 'all' && !sizes.includes(settings.count)) settings.count = 'all';
+    $('#opt-count').innerHTML = sizes.map((n) => `<option value="${n}">${n}</option>`).join('') +
+      `<option value="all">Todas (${avail})</option>`;
+    $('#opt-count').value = String(settings.count);
+
+    const typeCounts = {};
+    pool().forEach((q) => { typeCounts[q.type] = (typeCounts[q.type] || 0) + 1; });
+    $('#types-line').textContent = Object.keys(TYPES).filter((t) => typeCounts[t]).map((t) => `${typeCounts[t]} ${TYPE_PLURAL[t]}`).join(' · ');
+
+    const n = settings.count === 'all' ? avail : Math.min(settings.count, avail);
+    $('#selection-summary').textContent = avail ? `${n} ${n === 1 ? 'pregunta' : 'preguntas'} · opciones mezcladas en cada intento` : 'Elegí al menos un tema';
+    $('#btn-start').disabled = avail === 0;
+
+    const failed = failedFromHistory();
+    const rf = $('#btn-review-failed');
+    rf.classList.toggle('hidden', !failed.length);
+    rf.textContent = `Repasar falladas (${failed.length})`;
+
+    const s = loadSession();
+    $('#resume-panel').classList.toggle('hidden', !s);
+    if (s) {
+      const answered = s.ids.filter((id) => s.resp[id]).length;
+      $('#resume-text').innerHTML = `${esc(s.label || 'Intento')}: vas por la pregunta <strong>${s.cur + 1}</strong> de <strong>${s.ids.length}</strong> (${answered} respondidas).`;
+    }
+
+    const hist = store.get(K('history'), []);
+    $('#history-panel').classList.toggle('hidden', !hist.length);
+    if (hist.length) {
+      $('#history-table').innerHTML = '<tr><th>Fecha</th><th>Tipo</th><th class="num">Preguntas</th><th class="num">Puntaje</th></tr>' +
+        hist.slice(0, 8).map((h) => `<tr><td>${esc(new Date(h.date).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }))}</td><td>${esc(h.label)}</td><td class="num">${h.n}</td><td class="num">${h.pct}%</td></tr>`).join('');
+    }
+  }
+
+  $('#cat-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const c = chip.dataset.cat;
+    settings.cats = settings.cats.includes(c) ? settings.cats.filter((x) => x !== c) : CATS.filter((x) => x === c || settings.cats.includes(x));
+    saveSettings(); renderStart();
+  });
+  $('#cats-all').addEventListener('click', () => { settings.cats = CATS.slice(); saveSettings(); renderStart(); });
+  $('#cats-none').addEventListener('click', () => { settings.cats = []; saveSettings(); renderStart(); });
+  $('#opt-count').addEventListener('change', (e) => { settings.count = e.target.value === 'all' ? 'all' : +e.target.value; saveSettings(); renderStart(); });
+  $('#opt-shuffle').addEventListener('change', (e) => { settings.shuffle = e.target.checked; saveSettings(); });
+  $('#opt-open').addEventListener('change', (e) => { settings.open = e.target.checked; saveSettings(); renderStart(); });
+  $('#btn-clear-history').addEventListener('click', () => {
+    if (!confirm('¿Borrar el historial de intentos y el registro de preguntas falladas?')) return;
+    store.del(K('history')); store.del(K('qstats')); renderStart();
+  });
+
+  // Selección proporcional por tema (resto mayor) cuando se piden menos preguntas que las disponibles.
+  function pick(questions, count, shuffleOrder) {
+    let chosen = questions;
+    if (count !== 'all' && count < questions.length) {
+      const groups = new Map();
+      questions.forEach((q) => { if (!groups.has(q.cat)) groups.set(q.cat, []); groups.get(q.cat).push(q); });
+      const quotas = [...groups.entries()].map(([cat, qs]) => {
+        const exact = (count * qs.length) / questions.length;
+        return { qs, take: Math.floor(exact), rem: exact - Math.floor(exact) };
+      });
+      let left = count - quotas.reduce((s, x) => s + x.take, 0);
+      quotas.slice().sort((a, b) => b.rem - a.rem).forEach((x) => { if (left > 0) { x.take++; left--; } });
+      chosen = quotas.flatMap((x) => shuffle(x.qs).slice(0, x.take));
+    }
+    return shuffleOrder ? shuffle(chosen) : chosen.slice().sort((a, b) => a.n - b.n);
+  }
+
+  function makePerm(q) {
+    if (q.type === 'single' || q.type === 'multi') return q.fixedOrder ? range(q.options.length) : shuffle(range(q.options.length));
+    if (q.type === 'match') return shuffle(range(q.pairs.length + (q.extra ? q.extra.length : 0)));
+    if (q.type === 'order') {
+      let p;
+      do { p = shuffle(range(q.items.length)); } while (p.every((v, i) => v === i));
+      return p;
+    }
+    return null;
+  }
+
+  function startSession(questions, label) {
+    if (!questions.length) return;
+    S = { ids: questions.map((q) => q.id), perms: {}, cur: 0, resp: {}, phase: 'answering', draft: '', started: Date.now(), label };
+    questions.forEach((q) => { const p = makePerm(q); if (p) S.perms[q.id] = p; });
+    saveSession();
+    show('quiz');
+    renderQuestion();
+  }
+
+  $('#btn-start').addEventListener('click', () => {
+    if (loadSession() && !confirm('Hay un intento sin terminar. ¿Descartarlo y empezar uno nuevo?')) return;
+    startSession(pick(pool(), settings.count, settings.shuffle), 'Práctica');
+  });
+  $('#btn-review-failed').addEventListener('click', () => {
+    if (loadSession() && !confirm('Hay un intento sin terminar. ¿Descartarlo y empezar el repaso?')) return;
+    const ids = failedFromHistory();
+    startSession(pick(BANK.filter((q) => ids.includes(q.id)), 'all', settings.shuffle), 'Repaso de falladas');
+  });
+  $('#btn-resume').addEventListener('click', () => {
+    S = loadSession();
+    if (!S) { renderStart(); return; }
+    show('quiz');
+    renderQuestion();
+  });
+  $('#btn-discard').addEventListener('click', () => { clearSession(); renderStart(); });
+
+  // ───────── pregunta ─────────
+  const matchRights = (q) => q.pairs.map((p) => p[1]).concat(q.extra || []);
+
+  function optionHTML(text, value, k, kind) {
+    return `<button type="button" class="option" role="${kind === 'multi' ? 'checkbox' : 'radio'}" aria-checked="false" data-v="${value}">` +
+      `<span class="option-marker ${kind === 'multi' ? 'marker-check' : 'marker-radio'}">${k < 9 ? k + 1 : ''}</span>` +
+      `<span class="option-text">${text}</span></button>`;
+  }
+
+  function orderItemHTML(text, orig) {
+    return `<li class="order-item" data-v="${orig}"><span class="order-pos"></span><span class="order-text">${text}</span>` +
+      `<span class="order-btns"><button type="button" class="order-btn" data-dir="-1" aria-label="Subir">▲</button>` +
+      `<button type="button" class="order-btn" data-dir="1" aria-label="Bajar">▼</button></span></li>`;
+  }
+
+  function renumberOrder() {
+    const items = $$('.order-item', card);
+    items.forEach((li, i) => {
+      $('.order-pos', li).textContent = i + 1;
+      const [up, down] = $$('.order-btn', li);
+      up.disabled = i === 0 || S.phase !== 'answering';
+      down.disabled = i === items.length - 1 || S.phase !== 'answering';
+    });
+  }
+
+  function renderQuestion() {
+    const q = curQ();
+    const total = S.ids.length;
+    const r = S.resp[q.id];
+    const perm = S.perms[q.id];
+    $('#q-current').textContent = S.cur + 1;
+    $('#q-total').textContent = total;
+    $('#q-category').textContent = q.cat;
+    $('#progress-fill').style.width = `${(S.ids.filter((id) => S.resp[id]).length / total) * 100}%`;
+
+    let h = `<div class="question-meta">Pregunta ${S.cur + 1}<span class="question-tag">${esc(q.cat)}</span><span class="question-tag">${TYPES[q.type]}</span></div>`;
+    h += `<div class="question-text">${q.text}</div>`;
+    if (q.code) h += `<pre class="snippet">${esc(q.code)}</pre>`;
+
+    switch (q.type) {
+      case 'single':
+      case 'multi':
+        if (q.type === 'multi') h += '<p class="hint">Marcá <strong>todas</strong> las correctas.</p>';
+        h += `<div class="options" role="${q.type === 'multi' ? 'group' : 'radiogroup'}">` +
+          perm.map((orig, k) => optionHTML(q.options[orig], orig, k, q.type)).join('') + '</div>';
+        break;
+      case 'tf':
+        h += `<div class="options" role="radiogroup">${optionHTML('Verdadero', 'true', 0, 'single')}${optionHTML('Falso', 'false', 1, 'single')}</div>`;
+        break;
+      case 'text':
+        h += '<input type="text" class="text-input" id="text-answer" placeholder="Tu respuesta…" autocomplete="off" spellcheck="false">';
+        break;
+      case 'match': {
+        const rights = matchRights(q);
+        h += `<p class="hint">Elegí la opción que corresponde a cada elemento${q.extra && q.extra.length ? ' · <strong>sobran opciones</strong>' : ''}.</p><div class="match">`;
+        q.pairs.forEach((p, li) => {
+          h += `<div class="match-row" data-i="${li}"><div class="match-left">${p[0]}</div>` +
+            `<select class="match-select" aria-label="Opción para ${esc(plain(p[0]))}"><option value="">Elegí…</option>` +
+            perm.map((ri) => `<option value="${ri}">${esc(plain(rights[ri]))}</option>`).join('') +
+            '</select><div class="match-fb"></div></div>';
+        });
+        h += '</div>';
+        break;
+      }
+      case 'order': {
+        const seq = r ? r.ua : perm;
+        h += '<p class="hint">Ordená con las flechas, del <strong>primero</strong> al <strong>último</strong>.</p>' +
+          '<ol class="order">' + seq.map((orig) => orderItemHTML(q.items[orig], orig)).join('') + '</ol>';
+        break;
+      }
+      case 'open':
+        h += '<textarea class="text-area" id="open-answer" placeholder="Escribí tu respuesta (opcional) y después compará con la respuesta modelo…"></textarea>';
+        break;
+    }
+    h += '<div id="feedback-area" aria-live="polite"></div>';
+    card.innerHTML = h;
+    if (q.type === 'order') renumberOrder();
+
+    if (r) {
+      S.phase = 'feedback';
+      applyFeedback(q, r);
+    } else if (S.phase === 'grading' && q.type === 'open') {
+      $('#open-answer').value = S.draft || '';
+      showGrading(q);
+    } else {
+      S.phase = 'answering';
+      if (q.type === 'text') $('#text-answer').focus();
+    }
+    updateControls();
+  }
+
+  card.addEventListener('click', (e) => {
+    const opt = e.target.closest('.option');
+    if (opt) { toggleOption(opt); return; }
+    const ob = e.target.closest('.order-btn');
+    if (ob && S.phase === 'answering') {
+      const li = ob.closest('.order-item');
+      if (+ob.dataset.dir < 0 && li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling);
+      if (+ob.dataset.dir > 0 && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
+      renumberOrder();
+      if (!ob.disabled) ob.focus(); else $('.order-btn:not(:disabled)', li)?.focus();
+      return;
+    }
+    const g = e.target.closest('.btn-grade');
+    if (g) gradeOpen(g.dataset.g);
+  });
+
+  function toggleOption(el) {
+    if (S.phase !== 'answering' || el.disabled) return;
+    const q = curQ();
+    if (q.type === 'multi') {
+      const on = el.getAttribute('aria-checked') !== 'true';
+      el.setAttribute('aria-checked', String(on));
+      el.classList.toggle('selected', on);
+    } else {
+      $$('.option', card).forEach((o) => { o.classList.remove('selected'); o.setAttribute('aria-checked', 'false'); });
+      el.classList.add('selected');
+      el.setAttribute('aria-checked', 'true');
+    }
+  }
+
+  function collect(q) {
+    switch (q.type) {
+      case 'single': { const s = $('.option.selected', card); return s ? +s.dataset.v : null; }
+      case 'tf': { const s = $('.option.selected', card); return s ? s.dataset.v === 'true' : null; }
+      case 'multi': { const v = $$('.option.selected', card).map((o) => +o.dataset.v).sort((a, b) => a - b); return v.length ? v : null; }
+      case 'text': { const v = $('#text-answer').value.trim(); return v || null; }
+      case 'match': { const v = $$('.match-select', card).map((s) => (s.value === '' ? null : +s.value)); return v.every((x) => x !== null) ? v : null; }
+      case 'order': return $$('.order-item', card).map((li) => +li.dataset.v);
+      case 'open': return $('#open-answer').value;
+    }
+    return null;
+  }
+
+  // Normaliza para comparar respuestas cortas: sin tildes, mayúsculas, signos ni artículo inicial.
+  function normText(s) {
+    return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim()
+      .replace(/^(el|la|los|las|un|una|unos|unas|lo|the)\s+/, '')
+      .replace(/\s+/g, '');
+  }
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    const prev = range(b.length + 1);
+    for (let i = 1; i <= a.length; i++) {
+      let diag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = prev[j];
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+        diag = tmp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  function matchText(ua, q) {
+    const u = normText(ua);
+    let best = null;
+    for (const a of q.answers) {
+      const n = normText(a);
+      if (u === n) return { ok: true, fuzzy: false, matched: a };
+      if (q.exact) continue;
+      const tol = n.length <= 4 ? 0 : n.length <= 8 ? 1 : 2;
+      const d = levenshtein(u, n);
+      if (d <= tol && (!best || d < best.d)) best = { d, a };
+    }
+    return best ? { ok: true, fuzzy: true, matched: best.a } : { ok: false };
+  }
+
+  function grade(q, ua) {
+    let ok = false;
+    const info = {};
+    switch (q.type) {
+      case 'single':
+      case 'tf':
+        ok = ua === q.answer;
+        break;
+      case 'multi': {
+        const c = q.answer.slice().sort((a, b) => a - b);
+        ok = ua.length === c.length && ua.every((v, i) => v === c[i]);
+        info.hits = ua.filter((v) => q.answer.includes(v)).length;
+        info.extra = ua.length - info.hits;
+        break;
+      }
+      case 'text': Object.assign(info, matchText(ua, q)); ok = info.ok; break;
+      case 'match':
+      case 'order':
+        info.hits = ua.filter((v, i) => v === i).length;
+        ok = info.hits === ua.length;
+        break;
+    }
+    return { status: ok ? 'correct' : 'wrong', score: ok ? 1 : 0, ua, info };
+  }
+
+  function nudge(msg) {
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
+    if (msg) $('#feedback-area').innerHTML = `<p class="hint" style="margin: 1rem 0 0;">${msg}</p>`;
+  }
+
+  function onAction() {
+    if (!S || screen !== 'quiz') return;
+    const q = curQ();
+    if (S.phase === 'answering') {
+      const ua = collect(q);
+      if (q.type === 'open') {
+        S.draft = ua;
+        S.phase = 'grading';
+        saveSession();
+        showGrading(q);
+        updateControls();
+        return;
+      }
+      if (ua === null) {
+        nudge(q.type === 'match' ? 'Completá <strong>todos</strong> los pares antes de verificar.' : '');
+        return;
+      }
+      const r = grade(q, ua);
+      commit(q, r);
+      applyFeedback(q, r);
+      updateControls();
+    } else if (S.phase === 'feedback') {
+      next();
+    }
+  }
+
+  function commit(q, r) {
+    S.resp[q.id] = r;
+    S.phase = 'feedback';
+    recordStats(q, r);
+    saveSession();
+    $('#progress-fill').style.width = `${(S.ids.filter((id) => S.resp[id]).length / S.ids.length) * 100}%`;
+  }
+
+  function next() {
+    if (S.cur < S.ids.length - 1) {
+      S.cur++;
+      S.phase = 'answering';
+      S.draft = '';
+      saveSession();
+      renderQuestion();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      finish();
+    }
+  }
+
+  function skip() {
+    if (!S || S.phase !== 'answering') return;
+    const q = curQ();
+    const r = { status: 'skipped', score: 0, ua: null, info: {} };
+    S.resp[q.id] = r;
+    recordStats(q, r);
+    next();
+  }
+
+  function updateControls() {
+    const q = curQ();
+    const act = $('#btn-action');
+    const isLast = S.cur === S.ids.length - 1;
+    act.disabled = S.phase === 'grading';
+    if (S.phase === 'answering') act.textContent = q.type === 'open' ? 'Ver respuesta modelo' : 'Verificar';
+    else if (S.phase === 'grading') act.textContent = 'Elegí cómo te fue ↑';
+    else act.textContent = isLast ? 'Ver resultados →' : 'Siguiente →';
+    $('#btn-skip').disabled = S.phase !== 'answering';
+  }
+
+  // ───────── desarrollo: respuesta modelo y autoevaluación ─────────
+  function modelHTML(q) {
+    return '<div class="model"><div class="model-label">Respuesta modelo</div>' +
+      `<div class="model-text">${q.answer}</div>` +
+      (q.points && q.points.length ? `<div class="model-label">Puntos clave que no pueden faltar</div><ul class="model-points">${q.points.map((p) => `<li>${p}</li>`).join('')}</ul>` : '') +
+      '</div>';
+  }
+
+  function showGrading(q) {
+    $('#open-answer').readOnly = true;
+    $('#feedback-area').innerHTML = `<div class="feedback">${modelHTML(q)}` +
+      (q.explain ? `<div class="fb-explain">${q.explain}</div>` : '') +
+      '<div class="grade-row"><span>¿Cómo te fue?</span>' +
+      '<button type="button" class="btn-grade" data-g="correct">1 · Lo sabía</button>' +
+      '<button type="button" class="btn-grade" data-g="partial">2 · A medias</button>' +
+      '<button type="button" class="btn-grade" data-g="wrong">3 · No lo sabía</button></div></div>';
+  }
+
+  function gradeOpen(g) {
+    if (!S || S.phase !== 'grading') return;
+    const q = curQ();
+    const r = { status: g, score: g === 'correct' ? 1 : g === 'partial' ? 0.5 : 0, ua: S.draft || '', info: {} };
+    commit(q, r);
+    applyFeedback(q, r);
+    updateControls();
+    $('#btn-action').focus();
+  }
+
+  // ───────── corrección visual ─────────
+  function mark(el, cls, sym) {
+    el.classList.add(cls);
+    const m = $('.option-marker', el);
+    if (m) m.textContent = sym;
+  }
+
+  function applyFeedback(q, r) {
+    const ua = r.ua;
+    switch (q.type) {
+      case 'single':
+      case 'tf': {
+        const correctV = String(q.answer);
+        $$('.option', card).forEach((el) => {
+          el.disabled = true;
+          el.classList.remove('selected');
+          const v = el.dataset.v;
+          if (v === correctV) mark(el, 'correct', '✓');
+          else if (ua !== null && v === String(ua)) mark(el, 'wrong', '✗');
+        });
+        break;
+      }
+      case 'multi': {
+        const user = new Set(ua || []);
+        $$('.option', card).forEach((el) => {
+          el.disabled = true;
+          el.classList.remove('selected');
+          const v = +el.dataset.v;
+          const inC = q.answer.includes(v);
+          if (inC && user.has(v)) mark(el, 'correct', '✓');
+          else if (!inC && user.has(v)) mark(el, 'wrong', '✗');
+          else if (inC) mark(el, 'missed', '·');
+        });
+        break;
+      }
+      case 'text': {
+        const inp = $('#text-answer');
+        inp.value = ua ?? '';
+        inp.disabled = true;
+        inp.classList.add(r.status === 'correct' ? 'correct' : 'wrong');
+        break;
+      }
+      case 'match': {
+        const rights = matchRights(q);
+        $$('.match-row', card).forEach((row, i) => {
+          const sel = $('.match-select', row);
+          sel.value = String(ua[i]);
+          sel.disabled = true;
+          const ok = ua[i] === i;
+          row.classList.add(ok ? 'correct' : 'wrong');
+          if (!ok) $('.match-fb', row).innerHTML = `✓ Correcta: ${esc(plain(rights[i]))}`;
+        });
+        break;
+      }
+      case 'order':
+        $$('.order-item', card).forEach((li, i) => {
+          const ok = +li.dataset.v === i;
+          li.classList.add(ok ? 'correct' : 'wrong');
+          const btns = $('.order-btns', li);
+          btns.innerHTML = ok ? '' : `<span class="order-note">va en ${+li.dataset.v + 1}.º</span>`;
+        });
+        break;
+      case 'open': {
+        const ta = $('#open-answer');
+        ta.value = ua || '';
+        ta.readOnly = true;
+        break;
+      }
+    }
+    $('#feedback-area').innerHTML = feedbackHTML(q, r);
+  }
+
+  function feedbackHTML(q, r) {
+    const labels = { correct: '✓ Correcto', wrong: '✗ Incorrecto', partial: '½ A medias' };
+    if (q.type === 'open') labels.correct = '✓ Lo sabías';
+    if (q.type === 'open') labels.wrong = '✗ A repasar';
+    let extra = '';
+    const i = r.info || {};
+    if (q.type === 'text') {
+      if (r.status === 'correct' && i.fuzzy) extra = `Aceptada con tolerancia a errores de tipeo. Forma esperada: <strong>${esc(i.matched)}</strong>.`;
+      else if (r.status !== 'correct') extra = `Respuesta esperada: <strong>${esc(q.answers[0])}</strong>.`;
+    } else if (q.type === 'multi' && r.status !== 'correct') {
+      extra = `Marcaste ${i.hits} de ${q.answer.length} correctas` + (i.extra ? ` y ${i.extra} incorrecta${i.extra > 1 ? 's' : ''}.` : '.');
+    } else if (q.type === 'match' && r.status !== 'correct') {
+      extra = `${i.hits} de ${q.pairs.length} pares correctos.`;
+    } else if (q.type === 'order' && r.status !== 'correct') {
+      extra = `${i.hits} de ${q.items.length} en su lugar. Orden correcto:<ol>${q.items.map((t) => `<li>${t}</li>`).join('')}</ol>`;
+    } else if (q.type === 'open') {
+      extra = modelHTML(q);
+    }
+    return `<div class="feedback ${r.status}"><span class="feedback-label">${labels[r.status]}</span>` +
+      (extra ? `<div class="fb-extra">${extra}</div>` : '') +
+      (q.explain ? `<div class="fb-explain">${q.explain}</div>` : '') + '</div>';
+  }
+
+  // ───────── resultados ─────────
+  function finish() {
+    const ids = S.ids.filter((id) => S.resp[id]);
+    const hist = store.get(K('history'), []);
+    clearSession();
+    if (!ids.length) { S = null; renderStart(); show('start'); return; }
+    LAST = { ids, resp: S.resp, total: S.ids.length, label: S.label };
+    const pts = ids.reduce((s, id) => s + S.resp[id].score, 0);
+    hist.unshift({ date: Date.now(), label: S.label, n: ids.length, pct: Math.round((pts / ids.length) * 100) });
+    store.set(K('history'), hist.slice(0, 30));
+    S = null;
+    renderResults();
+    show('results');
+  }
+
+  $('#btn-finish').addEventListener('click', () => {
+    const answered = S.ids.filter((id) => S.resp[id]).length;
+    const msg = answered
+      ? `¿Terminar ahora? El resultado se calcula con las ${answered} preguntas respondidas.`
+      : '¿Salir del intento? No respondiste ninguna pregunta todavía.';
+    if (confirm(msg)) finish();
+  });
+
+  function renderResults() {
+    const { ids, resp } = LAST;
+    const count = (st) => ids.filter((id) => resp[id].status === st).length;
+    const c = { correct: count('correct'), partial: count('partial'), wrong: count('wrong'), skipped: count('skipped') };
+    const pts = ids.reduce((s, id) => s + resp[id].score, 0);
+    const pct = Math.round((pts / ids.length) * 100);
+
+    $('#results-eyebrow').textContent = LAST.label === 'Repaso de falladas' ? 'Resultado del repaso' : 'Resultado final';
+    $('#results-score').textContent = pct + '%';
+    $('#results-fraction').textContent = (c.partial ? `${fmtNum(pts)} de ${ids.length} puntos` : `${c.correct} de ${ids.length} correctas`) +
+      (ids.length < LAST.total ? ` · terminado en la ${ids.length}.ª de ${LAST.total}` : '');
+
+    let msg;
+    if (pct >= 90) msg = 'Dominio sólido del material. Muy buen nivel para la evaluación.';
+    else if (pct >= 75) msg = 'Buen manejo general. Revisá las que fallaste para no llegar con huecos.';
+    else if (pct >= 60) msg = 'Tenés las ideas centrales, pero hay temas que merecen otra pasada.';
+    else if (pct >= 40) msg = 'Hay conceptos importantes para reforzar. Repasá el material y volvé a intentar.';
+    else msg = 'Conviene volver al material teórico antes de seguir practicando.';
+    $('#results-message').textContent = msg;
+
+    $('#results-stats').innerHTML =
+      `<div class="stat good"><div class="stat-num">${c.correct}</div><div class="stat-label">Correctas</div></div>` +
+      (c.partial ? `<div class="stat mid"><div class="stat-num">${c.partial}</div><div class="stat-label">A medias</div></div>` : '') +
+      `<div class="stat bad"><div class="stat-num">${c.wrong}</div><div class="stat-label">Incorrectas</div></div>` +
+      `<div class="stat"><div class="stat-num">${c.skipped}</div><div class="stat-label">Saltadas</div></div>`;
+
+    $('#cat-results').innerHTML = CATS.map((cat) => {
+      const cids = ids.filter((id) => BY_ID.get(id).cat === cat);
+      if (!cids.length) return '';
+      const cp = cids.reduce((s, id) => s + resp[id].score, 0);
+      const p = Math.round((cp / cids.length) * 100);
+      const color = p >= 75 ? 'var(--correct)' : p >= 50 ? 'var(--partial)' : 'var(--wrong)';
+      return `<div class="cat-row"><div class="cat-row-top"><span>${esc(cat)}</span><span class="cat-row-score"><strong>${fmtNum(cp)}/${cids.length}</strong> · ${p}%</span></div>` +
+        `<div class="cat-bar"><div style="width: ${p}%; background: ${color};"></div></div></div>`;
+    }).join('');
+
+    const failed = ids.filter((id) => resp[id].status !== 'correct');
+    const rb = $('#btn-retry-failed');
+    rb.classList.toggle('hidden', !failed.length);
+    rb.textContent = `Repasar falladas (${failed.length})`;
+
+    reviewFilter = 'all';
+    $('#review-section').classList.add('hidden');
+  }
+
+  function uaString(q, r) {
+    if (r.status === 'skipped') return '—';
+    switch (q.type) {
+      case 'single': return q.options[r.ua];
+      case 'tf': return r.ua ? 'Verdadero' : 'Falso';
+      case 'multi': return r.ua.map((i) => q.options[i]).join(' · ');
+      case 'text': return esc(r.ua);
+      case 'match': { const rights = matchRights(q); return q.pairs.map((p, i) => `${p[0]} → ${rights[r.ua[i]]}`).join('<br>'); }
+      case 'order': return r.ua.map((v, i) => `${i + 1}. ${q.items[v]}`).join('<br>');
+      case 'open': return r.ua && r.ua.trim() ? esc(r.ua).replace(/\n/g, '<br>') : '<em>(sin escribir)</em>';
+    }
+    return '';
+  }
+
+  function correctString(q) {
+    switch (q.type) {
+      case 'single': return q.options[q.answer];
+      case 'tf': return q.answer ? 'Verdadero' : 'Falso';
+      case 'multi': return q.answer.map((i) => q.options[i]).join(' · ');
+      case 'text': return esc(q.answers[0]);
+      case 'match': return q.pairs.map((p) => `${p[0]} → ${p[1]}`).join('<br>');
+      case 'order': return q.items.map((t, i) => `${i + 1}. ${t}`).join('<br>');
+      case 'open': return modelHTML(q);
+    }
+    return '';
+  }
+
+  // En emparejar, ordenar y desarrollo la respuesta ocupa varias líneas: va en un bloque aparte.
+  function reviewLine(label, html, q) {
+    const block = ['match', 'order', 'open'].includes(q.type) && html !== '—';
+    return `<div class="review-line"><em>${label}:</em>${block ? `<div class="review-block">${html}</div>` : ` ${html}`}</div>`;
+  }
+
+  function renderReview() {
+    const { ids, resp } = LAST;
+    const names = { correct: 'Correcta', wrong: 'Incorrecta', partial: 'A medias', skipped: 'Saltada' };
+    const list = ids.map((id, i) => ({ q: BY_ID.get(id), r: resp[id], i }))
+      .filter((x) => reviewFilter === 'all' || x.r.status !== 'correct');
+    $('#review-list').innerHTML = list.length ? list.map(({ q, r, i }) =>
+      `<div class="review-item ${r.status}">` +
+        `<div class="review-meta"><span class="st-${r.status}">${names[r.status]}</span> · ${esc(q.cat)} · ${TYPES[q.type]} · Pregunta ${i + 1}</div>` +
+        `<div class="review-q">${q.text}</div>` +
+        (q.code ? `<pre class="snippet">${esc(q.code)}</pre>` : '') +
+        reviewLine('Tu respuesta', uaString(q, r), q) +
+        (q.type === 'open'
+          ? `<div class="review-line">${correctString(q)}</div>`
+          : reviewLine('Correcta', correctString(q), q)) +
+        (q.explain ? `<div class="review-explain">${q.explain}</div>` : '') +
+      '</div>').join('') : '<p class="start-info">No hay preguntas falladas en este intento. 🎯</p>';
+  }
+
+  $('#btn-review').addEventListener('click', () => {
+    const sec = $('#review-section');
+    sec.classList.toggle('hidden');
+    if (!sec.classList.contains('hidden')) { renderReview(); sec.scrollIntoView({ behavior: 'smooth' }); }
+  });
+  $$('#review-section [data-filter]').forEach((b) => b.addEventListener('click', () => {
+    reviewFilter = b.dataset.filter;
+    $$('#review-section [data-filter]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    renderReview();
+  }));
+  $('#btn-retry-failed').addEventListener('click', () => {
+    const failed = LAST.ids.filter((id) => LAST.resp[id].status !== 'correct');
+    startSession(pick(failed.map((id) => BY_ID.get(id)), 'all', settings.shuffle), 'Repaso de falladas');
+  });
+  $('#btn-home').addEventListener('click', () => { renderStart(); show('start'); });
+
+  // ───────── botones y teclado ─────────
+  $('#btn-action').addEventListener('click', onAction);
+  $('#btn-skip').addEventListener('click', skip);
+
+  document.addEventListener('keydown', (e) => {
+    if (screen !== 'quiz' || !S || e.altKey || e.metaKey) return;
+    const t = e.target;
+    const tag = t.tagName;
+    if (tag === 'TEXTAREA') {
+      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); onAction(); }
+      return;
+    }
+    if (tag === 'INPUT') {
+      if (e.key === 'Enter') { e.preventDefault(); onAction(); }
+      return;
+    }
+    if (tag === 'SELECT' || e.ctrlKey) return;
+    if (e.key === 'Enter') {
+      if (tag === 'BUTTON' && !t.classList.contains('option') && t.id !== 'btn-action') return; // que el botón haga lo suyo
+      e.preventDefault();
+      onAction();
+      return;
+    }
+    const q = curQ();
+    if (/^[1-9]$/.test(e.key)) {
+      const k = +e.key - 1;
+      if (S.phase === 'answering' && ['single', 'multi', 'tf'].includes(q.type)) {
+        const opts = $$('.option', card);
+        if (opts[k]) { e.preventDefault(); toggleOption(opts[k]); }
+      } else if (S.phase === 'grading' && k < 3) {
+        e.preventDefault();
+        gradeOpen(['correct', 'partial', 'wrong'][k]);
+      }
+      return;
+    }
+    if ((e.key === 's' || e.key === 'S') && S.phase === 'answering') { e.preventDefault(); skip(); }
+  });
+
+  renderStart();
+})();
+</script>
+</body>
+</html>
