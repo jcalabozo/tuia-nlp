@@ -94,7 +94,7 @@ python -m ipykernel install --user --name pln-tp2 --display-name "Python 3.12 (P
 
 - El corpus es `PLN_TUIA/P1/data/libros.csv` (200 libros, resultado del TP1).
 - El enunciado está en [U2/tp/Enunciado_TP2_embeddings.md](U2/tp/Enunciado_TP2_embeddings.md), y hay una copia en `PLN_TUIA/P2/enunciado/`.
-- El plan de trabajo (qué hay que hacer, cómo, qué falta y los problemas del enunciado) y el listado del corpus para escribir `queries.json` están en el repo del TP, en [`P2/docs/`](https://github.com/jcalabozo/PLN_TUIA/tree/main/P2/docs).
+- El informe y el listado del corpus para escribir `queries.json` están en el repo del TP, en [`P2/docs/`](https://github.com/jcalabozo/PLN_TUIA/tree/main/P2/docs).
 - El modelo `SBW-vectors-300-min5` (~1 GB) se baja de [SBWCE](https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz) a `P2/models/`, que está ignorado.
 
 ### 5. Mantenerse al día
