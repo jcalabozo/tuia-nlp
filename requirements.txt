@@ -8,5 +8,6 @@ sentence-transformers>=3.0
 nltk
 gdown
 ipykernel
+ipywidgets
 nbclient
 nbformat
