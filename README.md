@@ -82,7 +82,7 @@ Los notebooks leen `data/...` con ruta relativa, así que se ejecutan con `U2/pr
 
 ### 4. Entorno del TP2
 
-El TP2 tiene su propio entorno, porque suma gensim y el cliente de Postgres:
+El TP2 tiene su propio entorno, porque suma gensim y los modelos de embeddings. El detalle (descarga de SBW, caché de Hugging Face) está en el [README del TP](https://github.com/jcalabozo/PLN_TUIA/blob/main/P2/README.md):
 
 ```bash
 cd PLN_TUIA/P2
@@ -93,10 +93,9 @@ python -m ipykernel install --user --name pln-tp2 --display-name "Python 3.12 (P
 ```
 
 - El corpus es `PLN_TUIA/P1/data/libros.csv` (200 libros, resultado del TP1).
-- El enunciado está en [U2/tp/Enunciado_TP2_embeddings.md](U2/tp/Enunciado_TP2_embeddings.md), y hay una copia en `PLN_TUIA/P2/`.
+- El enunciado está en [U2/tp/Enunciado_TP2_embeddings.md](U2/tp/Enunciado_TP2_embeddings.md), y hay una copia en `PLN_TUIA/P2/enunciado/`.
 - El plan de trabajo (qué hay que hacer, cómo, qué falta y los problemas del enunciado) y el listado del corpus para escribir `queries.json` están en el repo del TP, en [`P2/docs/`](https://github.com/jcalabozo/PLN_TUIA/tree/main/P2/docs).
 - El modelo `SBW-vectors-300-min5` (~1 GB) se baja de [SBWCE](https://cs.famaf.unc.edu.ar/~ccardellino/SBWCE/SBW-vectors-300-min5.bin.gz) a `P2/models/`, que está ignorado.
-- Las credenciales de la base van en `P2/.env`, que tampoco se sube.
 
 ### 5. Mantenerse al día
 

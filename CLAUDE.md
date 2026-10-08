@@ -24,7 +24,7 @@ tuia-nlp/                 ← este repo (jcalabozo/tuia-nlp, público, personal)
 └── PLN_TUIA/             ← clon de jcalabozo/PLN_TUIA, ignorado por este repo
 ```
 
-- **PLN_TUIA es el repo grupal del TP**, con compañeros y docentes como colaboradores. Ahí no se commitea ni se pushea sin pedido explícito del usuario. No se copian apuntes ni prácticas de `U*/`; los documentos del TP (enunciado, plan de trabajo, listado del corpus) sí van ahí, en `P<n>/` y `P<n>/docs/`. Los comandos git del TP van con `git -C PLN_TUIA ...`.
+- **PLN_TUIA es el repo grupal del TP**, con compañeros y docentes como colaboradores. Ahí no se commitea ni se pushea sin pedido explícito del usuario. No se copian apuntes ni prácticas de `U*/`; los documentos del TP sí van ahí: el enunciado de la cátedra en `P<n>/enunciado/`, los datos que lee el notebook (como `queries.json`) en `P<n>/data/` y lo que escribe el grupo (informe, plan de trabajo, listado del corpus) en `P<n>/docs/`. Los comandos git del TP van con `git -C PLN_TUIA ...`.
 - **Entornos:** `.venv` (kernel `nlp-tuia`) para las prácticas; `PLN_TUIA/P2/.venv` (kernel `pln-tp2`) para el TP2.
 - **Notebooks:** leen `data/...` con ruta relativa, así que se ejecutan con su propia carpeta como directorio de trabajo. Para guardar las salidas, ejecutarlos con `nbclient`.
 - **Apuntes nuevos:** `python herramientas/notion_a_markdown.py <url-de-notion> U<n>/teoria`. Si aparece `Aviso: tipo de bloque sin soporte`, agregar ese tipo en `MarkdownWriter.render`.
