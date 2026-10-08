@@ -9,7 +9,8 @@ Repo de estudio de Procesamiento de Lenguaje Natural (TUIA, UNR). La puesta a pu
 - **Herramientas de la cátedra:** usar solo librerías y técnicas que aparecen en `U*/teoria/` o `U*/practicas/`. Si hace falta otra, consultar antes.
 - **Código simple, claro y conciso**, para un estudiante que da sus primeros pasos en NLP. Comentar el porqué de lo que no sea evidente; evitar trucos de una línea.
 - **Pedidos grandes:** presentar hallazgos y una propuesta, con preguntas numeradas y una opción recomendada, y esperar el OK. Las tareas chicas se hacen directo.
-- **Archivos de referencia:** las consignas y los ejemplos que deja el usuario no se reescriben. Las prácticas resueltas van en una copia con sufijo `_resuelta`, y los errores de consigna se señalan.
+- **Archivos de referencia:** las consignas y los ejemplos que deja el usuario no se reescriben. Las prácticas resueltas van en una copia con sufijo `_resuelta` que **solo completa el cuerpo de cada `TODO`** (y descomenta las llamadas que la consigna indica): sin celdas extra, sin interpretaciones, sin cálculos que el `TODO` no pide y sin tocar las celdas de la consigna. Lo único que se agrega es una celda inicial con los errores de consigna.
+- **Referencias para el TP:** la consigna, los apuntes y el código de las prácticas **originales**. Las prácticas resueltas no son referencia: las escribió Claude.
 
 ## Estructura
 
