@@ -7,6 +7,7 @@ Apuntes, resúmenes y prácticas de Procesamiento de Lenguaje Natural (Tecnicatu
 | [U1](U1/) | Unidad 1 — Extracción y Procesamiento de Texto |
 | [U2](U2/) | Unidad 2 — Representación Vectorial de Texto (incluye el enunciado del TP2) |
 | [U3](U3/) | Unidad 3 — Procesamiento del Lenguaje |
+| [U4](U4/) | Unidad 4 — Arquitecturas de Modelos de Lenguaje |
 | [quizzes](quizzes/) | Quiz interactivo de U1 y U2 (descargar el `.html` y abrirlo en el navegador) |
 | [herramientas](herramientas/) | `notion_a_markdown.py`: baja un apunte público de Notion a Markdown con sus imágenes |
 
@@ -40,7 +41,7 @@ Quedan dos repos independientes, cada uno con su propio git:
 
 ```
 tuia-nlp/              ← apuntes y prácticas (este repo)
-├── U1/  U2/  U3/      ← teoria/, practicas/ y tp/ en cada unidad
+├── U1/ … U4/         ← teoria/, practicas/ y tp/ en cada unidad
 ├── requirements.txt   ← entorno para las prácticas
 └── PLN_TUIA/          ← TP grupal (otro repo; este lo ignora)
     ├── P1/            ← TP1: scraper de Lectulandia y data/libros.csv
